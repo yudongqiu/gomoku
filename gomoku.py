@@ -67,7 +67,7 @@ class Gomoku(object):
 
     @property
     def state(self):
-        return (self.board, self.playing)
+        return (self.board, self.last_move, self.playing, self.board_size)
 
     def reset(self):
         self.board = (set(), set())
@@ -98,16 +98,22 @@ class Gomoku(object):
             self.playing = i_turn % 2
             self.print_board()
             current_player = self.players[self.playing]
+            other_player = self.players[int(not self.playing)]
             if self.fastmode < 2: print("--- %s's turn ---" % current_player.name)
             max_try = 5
             for i_try in range(max_try):
-                self.last_move = current_player.strategy(self.state)
+                action = current_player.strategy(self.state)
+                if action == (0, 0):
+                    print("Player %s admit defeat!" % current_player.name)
+                    winner = other_player.name
+                    if self.fastmode < 2: print("Winner is %s"%winner)
+                    return winner
+                self.last_move = action
                 if self.place_stone():
                     break
                 elif i_try == max_try-1:
                     if self.fastmode < 2: print("Player %s has made %d illegal moves, he lost."%(current_player.name, max_try))
-                    other_player = int(not current_player)
-                    winner = self.players[other_player].name
+                    winner = other_player.name
                     if self.fastmode < 2: print("Winner is %s"%winner)
                     return winner
             # check if current player wins
