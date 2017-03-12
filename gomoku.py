@@ -224,17 +224,24 @@ class Player(object):
 
     def human_input(self, state):
         """ Ask player to place stone """
-        s = raw_input('Please place stone, enter code like "8h":  ')
-        r, c = s[:-1], s[-1]
-        r = int(r)
-        c = ord(c) - 96
+        r, c = 0, 0
+        for t in range(3):
+            try:
+                s = raw_input('Please place stone, enter code like "8h":  ')
+                r, c = s[:-1], s[-1]
+                r = int(r)
+                c = ord(c) - 96
+                break
+            except:
+                print("Invalid input! Please try again. (%d)"%(3-t))
+                pass
         return (r,c)
 
 
 def main():
     import argparse
     parser = argparse.ArgumentParser("Play the Gomoku Game!", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('players', nargs='*', default=['Player1', 'AI'], help='Names of Players, the first one plays first.')
+    parser.add_argument('players', nargs='*', default=['AI', 'Player1'], help='Names of Players, the first one plays first.')
     parser.add_argument('--board_size', type=int, default=15, help='Size of the board.')
     parser.add_argument('--fast', action='store_true', help='Run the game in fast mode.')
     parser.add_argument('-n', '--ngames', type=int, help='Play a number of games to gather statistics.')
