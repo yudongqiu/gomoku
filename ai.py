@@ -35,6 +35,9 @@ def strategy(state):
 
     Your strategy will return a position code for the next stone, e.g. (8,7)
     """
+
+    initialize()
+
     global board_size
 
     board, last_move, playing, board_size = state
@@ -42,56 +45,49 @@ def strategy(state):
     my_stones = board[playing]
     opponent_stones = board[other_player]
     # put the first stone in the center if it's the start of the game
-    if len(my_stones) is 0 and len(opponent_stones) is 0:
+    if last_move is None:
         center = int((board_size+1)/2)
         return (center, center)
+    #elif len(my_stones) == 0:
+    #    return random.choice(list(nearby_avail_positions(last_move, opponent_stones)))
 
     state = (my_stones, opponent_stones)
-    #key = (frozenset(my_stones), frozenset(opponent_stones))
-    #if key in estimate_cache:
-    #    best_lv1 = 1.0 - estimate_cache[key][1]
-    #    print("best_lv1: %f"%best_lv1)
-    #else:
-    #    print("Haven't seen this state!")
-    #    best_lv1 = 1.0
-    # shift by 2 levels for next step
+
     alpha = -1.0
     beta = 2.0
     global move_interest
-    t0 = time.time()
-    for m in move_interest:
-        move_interest[m] *= 0.8
-    print("scaling interest took %.3f seconds" %(time.time() - t0))
-    #move_interest = collections.defaultdict(float)
+
+    try:
+        move_interest *= 0.8
+    except:
+        move_interest = np.zeros((board_size+1)**2).reshape(board_size+1, board_size+1)
+
+    U_stone.cache = U_stone.cachehigh.copy()
+    #U_stone.cache = dict()
     best_move, best_q = best_action_q(state, last_move, alpha, beta, True, 0)
 
     return best_move
 
-move_interest = collections.defaultdict(float)
 
 def best_action_q(state, last_move, alpha, beta, maximizing_player, level):
     "Return the optimal action for a state"
     #global estimate_cache, best_lv1, pruned, computed
-    my_stones, opponent_stones = state
+    #my_stones, opponent_stones = state
     best_move = (0,0) # admit defeat if all moves have 0 win rate
-    all_stones = my_stones | opponent_stones
-    possible_moves = available_positions(all_stones, 2)
+    #all_stones = my_stones | opponent_stones
+    possible_moves = available_positions(state, 2-int(level>1))
     #if level == 0:
     #    print(len(possible_moves))
     n_candidates = len(possible_moves)
     if level > 1 and n_candidates > 10:
-        n_candidates = int(10 + n_candidates/10)
-    global move_interest
-    # increase the insterest of nearby moves
-    nearby_moves = nearby_avail_positions(last_move, all_stones)
-    for m in nearby_moves:
-        move_interest[m] *= 1.5
+        n_candidates = 10
+        #n_candidates = int(10 + n_candidates/10)
+        #n_candidates = 15 - level
     if maximizing_player:
         max_q = 0.0
-        for _ in range(n_candidates):
+        for _ in xrange(n_candidates):
             possible_moves = sorted(possible_moves, key=lambda m: move_interest[m])
             current_move = possible_moves.pop()
-        #for current_move in possible_moves:
             q = Q_stone(state, current_move, alpha, beta, maximizing_player, level+1)
             if level == 0:
                 print current_move, q, "interest", move_interest[current_move]
@@ -106,8 +102,7 @@ def best_action_q(state, last_move, alpha, beta, maximizing_player, level):
         best_q = max_q
     else:
         min_q = 1.0
-        #for current_move in possible_moves:
-        for _ in range(n_candidates):
+        for _ in xrange(n_candidates):
             possible_moves = sorted(possible_moves, key=lambda m: move_interest[m])
             current_move = possible_moves.pop()
             q = Q_stone(state, current_move, alpha, beta, maximizing_player, level+1)
@@ -120,26 +115,35 @@ def best_action_q(state, last_move, alpha, beta, maximizing_player, level):
             if q == 0.0 or beta <= alpha:
                 break
         best_q = min_q
-    # reset the insterest of nearby moves
-    nearby_moves = nearby_avail_positions(last_move, all_stones)
-    for m in nearby_moves:
-        move_interest[m] /= 1.5
     return best_move, best_q
 
-@numba.jit(nopython=True,nogil=True)
-def available_positions(all_stones, dist=1):
+@numba.jit(nopython=True, nogil=True)
+def available_positions(state, dist=1):
+    my_stones, opponent_stones = state
     positions = set()
+    limiting = False # limiting positions if someone is winning
     for x in range(1, board_size+1):
         for y in range(1, board_size+1):
             stone = (x,y)
-            if stone not in all_stones and near_any_stone(stone, all_stones, dist):
-                positions.add(stone)
+            if stone not in my_stones and stone not in opponent_stones:
+                if limiting is False:
+                    if i_win(my_stones, stone) or i_win(opponent_stones,stone):
+                        limiting = True
+                        positions = {stone}
+                    elif near_any_stone(stone, state, dist):
+                        positions.add(stone)
+                else:
+                    if i_win(my_stones, stone) or i_win(opponent_stones,stone):
+                        positions.add(stone)
     return positions
 
 @numba.jit(nopython=True,nogil=True)
-def near_any_stone(last_move, all_stones, dist):
+def near_any_stone(last_move, state, dist):
     r1, c1 = last_move
-    for r2, c2 in all_stones:
+    for r2, c2 in state[0]:
+        if abs(r2-r1) <= dist and abs(c2-c1) <= dist:
+            return True
+    for r2, c2 in state[1]:
         if abs(r2-r1) <= dist and abs(c2-c1) <= dist:
             return True
     return False
@@ -166,6 +170,7 @@ def nearby_stones(this_stone):
             result.add(stone)
     return result
 
+#@numba.jit(nopython=True, nogil=True)
 def Q_stone(state, current_move, alpha, beta, maximizing_player, level):
     my_stones, opponent_stones = state
     if maximizing_player:
@@ -179,36 +184,59 @@ def Q_stone(state, current_move, alpha, beta, maximizing_player, level):
     state = (my_stones, opponent_stones)
     return U_stone(state, current_move, alpha, beta, maximizing_player, level)
 
+#@numba.jit(nopython=True, nogil=True)
 def U_stone(state, last_move, alpha, beta, maximizing_player, level):
     my_stones, opponent_stones = state
-    MC_start_level = 6
-    if maximizing_player:
-        if i_win(my_stones, last_move):
-            return 1.0
+    if maximizing_player: # put the stones of the current player first
+        key = (frozenset(my_stones), frozenset(opponent_stones))
     else:
-        if i_win(opponent_stones, last_move):
-            return 0.0
-    if level >= MC_start_level:
-        return MC_estimate_U(state, maximizing_player, 19, 20)
+        key = (frozenset(opponent_stones), frozenset(my_stones))
+    try:
+        return U_stone.cache[key]
+    except:
+        pass
 
-    #state = (opponent_stones, my_stones)
-    best_move, best_q = best_action_q(state, last_move, alpha, beta, not maximizing_player, level)
-    return best_q
+    MC_start_level = 7
+    if maximizing_player and i_win(my_stones, last_move):
+        result = 1.0
+    elif not maximizing_player and i_win(opponent_stones, last_move):
+        result = 0.0
+    elif level >= MC_start_level:
+        #return cached_MC(state, maximizing_player, 19, 20)
+        result = MC_estimate_U(state, maximizing_player, 19, 20)
+    else:
+        best_move, best_q = best_action_q(state, last_move, alpha, beta, not maximizing_player, level)
+        result = best_q
 
+    if level <= 2 or result == 1.0 or result == 0.0:
+        # save the high quality
+        U_stone.cachehigh[key] = result
+    U_stone.cache[key] = result
+
+    return result
+
+
+def cached_MC(state, maximizing_player, n_MC, max_steps):
+    if not hasattr(cached_MC, 'cache'):
+        cached_MC.cache = dict()
+    key = (frozenset(state[0]), frozenset(state[1]))
+    try:
+        return cached_MC.cache[key]
+    except:
+        cached_MC.cache[key] = result = MC_estimate_U(state, maximizing_player, n_MC, max_steps)
+        return result
 
 @numba.jit(nopython=True, nogil=True)
 def MC_estimate_U(state, maximizing_player, n_MC, max_steps):
     """ Randomly put stones until the game ends, estimate the U based on number of games won. """
     my_stones, opponent_stones = state
     n_win = 0.0
-    all_stones = my_stones | opponent_stones
     #if len(all_stones) < 4: return 0.5
-    all_possible_moves = available_positions(all_stones)
+    all_possible_moves = available_positions(state)
     for _ in range(n_MC):
         # pool of all available positions
         current_possible_moves = list(all_possible_moves)
         current_possible_moves_set = all_possible_moves.copy()
-        current_all_stone = all_stones.copy()
         current_my_stone = my_stones.copy()
         current_opponent_stone = opponent_stones.copy()
         winning_player = int(not maximizing_player) # 1 if it's my turn, 0 if it's opponent's turn
@@ -276,16 +304,9 @@ def MC_estimate_U(state, maximizing_player, n_MC, max_steps):
                         max_i_move += 1
 
             # check if game ends
-            #if i_win(current_stones, random_move):
             if winning:
                 n_win += winning_player
                 break
-            # prepare for the next round
-            current_all_stone.add(random_move)
-            #for ns in nearby_avail_positions(random_move, current_all_stone):
-            #    if ns not in current_possible_moves:
-            #        current_possible_moves.append(ns)
-            #        max_i_move += 1
             if max_i_move == 0 or i_step > max_steps: # this is a tie
                 n_win += 0.5
                 break
@@ -319,7 +340,7 @@ def stone_dist(stone1, stone2):
 
 @numba.jit(nopython=True,nogil=True)
 def i_win(my_stones, last_move):
-    if len(my_stones) < 5: return False
+    if len(my_stones) < 4: return False
     r, c = last_move
     # find any nearby stone
     nearby_stones = ((r-1,c-1), (r+1,c+1), (r-1,c), (r+1,c), (r-1,c+1), (r+1,c-1), (r,c-1), (r,c+1))
@@ -356,6 +377,20 @@ def i_win(my_stones, last_move):
         i_ns += (2 - i_ns % 2) # the next one on the opposite side is already explored
     return False
 
+def initialize():
+    if not hasattr(U_stone, 'cachehigh'):
+        if os.path.exists("cachehigh"):
+            U_stone.cachehigh = pickle.load(open('cachehigh', 'rb'))
+        else:
+            U_stone.cachehigh = dict()
+        global n_cache
+        n_cache = len(U_stone.cachehigh)
+        print("Initialized with %d high quality U_stone.cache" % n_cache)
+
+def finish():
+    if len(U_stone.cachehigh) > n_cache:
+        pickle.dump(U_stone.cachehigh, open('cachehigh', 'wb'))
+    print("Finished with %d high quality U_stone.cache."%len(U_stone.cachehigh))
 
 
 def benchmark():
@@ -387,7 +422,16 @@ def test():
     t1 = time.time()
     print("--- %f s  ---" %(t1-t0))
 
+def test2():
+    my_stones = {(6,7),(7,8),(8,8),(8,9)}
+    opponent_stones = {(5,7),(6,8),(7,9),(8,10)}
+    global board_size
+    board_size = 15
+    state = (my_stones, opponent_stones)
+    print i_win(opponent_stones, (4,6))
+    print available_positions(state)
+
 if __name__ == '__main__':
     import time
-    test()
+    test2()
     #benchmark()
