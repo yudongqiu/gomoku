@@ -48,8 +48,8 @@ def strategy(state):
     if last_move is None:
         center = int((board_size+1)/2)
         return (center, center)
-    #elif len(my_stones) == 0:
-    #    return random.choice(list(nearby_avail_positions(last_move, opponent_stones)))
+    elif len(my_stones) == 0:
+        return random.choice(list(nearby_avail_positions(last_move, opponent_stones)))
 
     state = (my_stones, opponent_stones)
 
@@ -89,12 +89,12 @@ def best_action_q(state, last_move, alpha, beta, maximizing_player, level):
             possible_moves = sorted(possible_moves, key=lambda m: move_interest[m])
             current_move = possible_moves.pop()
             q = Q_stone(state, current_move, alpha, beta, maximizing_player, level+1)
-            if level == 0:
-                print current_move, q, "interest", move_interest[current_move]
             if q * (0.8**level) > move_interest[current_move]:
                 move_interest[current_move] = q * (0.8**level)
             if q > alpha: alpha = q
             if q > max_q:
+                if level == 0:
+                    print current_move, q, "interest", move_interest[current_move]
                 max_q = q
                 best_move = current_move
             if q == 1.0 or beta <= alpha:
@@ -160,15 +160,15 @@ def nearby_avail_positions(this_stone, all_stones):
     return result
 
 @numba.jit(nopython=True, nogil=True)
-def nearby_stones(this_stone):
-    """ Find available positions on the board that are adjacent to this_stone """
-    r, c = this_stone
-    result = set()
-    nearby_pos = {(r-1,c-1), (r-1,c), (r-1,c+1), (r,c-1), (r,c+1), (r+1,c-1), (r+1,c), (r+1,c+1)}
-    for stone in nearby_pos:
-        if 0 < stone[0] <= board_size and 0 < stone[1] <= board_size:
-            result.add(stone)
-    return result
+def available_positions2(state):
+    my_stones, opponent_stones = state
+    positions = set()
+    for x in range(1, board_size+1):
+        for y in range(1, board_size+1):
+            stone = (x,y)
+            if stone not in my_stones and stone not in opponent_stones and near_any_stone(stone, state, 1):
+                positions.add(stone)
+    return positions
 
 #@numba.jit(nopython=True, nogil=True)
 def Q_stone(state, current_move, alpha, beta, maximizing_player, level):
@@ -192,26 +192,39 @@ def U_stone(state, last_move, alpha, beta, maximizing_player, level):
     else:
         key = (frozenset(opponent_stones), frozenset(my_stones))
     try:
-        return U_stone.cache[key]
+        cached_result = U_stone.cache[key] # the first player's win rate
+        if maximizing_player:
+            return cached_result
+        else:
+            return 1.0 - cached_result
     except:
         pass
 
-    MC_start_level = 7
+    MC_start_level = 6
     if maximizing_player and i_win(my_stones, last_move):
         result = 1.0
     elif not maximizing_player and i_win(opponent_stones, last_move):
         result = 0.0
-    elif level >= MC_start_level:
+    elif level == MC_start_level:
         #return cached_MC(state, maximizing_player, 19, 20)
+        this_U = MC_estimate_U(state, maximizing_player, 19, 20)
+        next_move, next_U = best_action_q(state, last_move, alpha, beta, not maximizing_player, level)
+        result = 0.5 * (this_U + next_U)
+    elif level > MC_start_level:
         result = MC_estimate_U(state, maximizing_player, 19, 20)
     else:
         best_move, best_q = best_action_q(state, last_move, alpha, beta, not maximizing_player, level)
         result = best_q
 
-    if level <= 2 or result == 1.0 or result == 0.0:
+    if maximizing_player:
+        cached_result = result
+    else:
+        cached_result = 1.0 - result
+
+    if cached_result == 1.0 or cached_result == 0.0 or level <= MC_start_level-5:
         # save the high quality
-        U_stone.cachehigh[key] = result
-    U_stone.cache[key] = result
+        U_stone.cachehigh[key] = cached_result
+    U_stone.cache[key] = cached_result
 
     return result
 
@@ -232,7 +245,7 @@ def MC_estimate_U(state, maximizing_player, n_MC, max_steps):
     my_stones, opponent_stones = state
     n_win = 0.0
     #if len(all_stones) < 4: return 0.5
-    all_possible_moves = available_positions(state)
+    all_possible_moves = available_positions2(state)
     for _ in range(n_MC):
         # pool of all available positions
         current_possible_moves = list(all_possible_moves)
@@ -317,27 +330,6 @@ def MC_estimate_U(state, maximizing_player, n_MC, max_steps):
 
 
 
-#@numba.jit(nopython=True, nogil=True)
-#def min_stone_dist(last_move, all_stones):
-#    r1, c1 = last_move
-#    min_dist = board_size
-#    for r2, c2 in all_stones:
-#        dist = max(abs(r1-r2), abs(c1-c2))
-#        if dist < min_dist:
-#            min_dist = dist
-#    return min_dist
-
-
-
-def min_stone_dist(last_move, all_stones):
-    return min(stone_dist(last_move, stone) for stone in all_stones)
-
-@memo
-def stone_dist(stone1, stone2):
-    r1, c1 = stone1
-    r2, c2 = stone2
-    return max(abs(r1-r2), abs(c1-c2))
-
 @numba.jit(nopython=True,nogil=True)
 def i_win(my_stones, last_move):
     if len(my_stones) < 4: return False
@@ -379,18 +371,28 @@ def i_win(my_stones, last_move):
 
 def initialize():
     if not hasattr(U_stone, 'cachehigh'):
+        t0 = time.time()
         if os.path.exists("cachehigh"):
             U_stone.cachehigh = pickle.load(open('cachehigh', 'rb'))
         else:
             U_stone.cachehigh = dict()
         global n_cache
         n_cache = len(U_stone.cachehigh)
-        print("Initialized with %d high quality U_stone.cache" % n_cache)
+        t1 = time.time()
+        print("Initialized with %d high quality U_stone.cache in %.2f seconds." % (n_cache, t1-t0))
 
 def finish():
+    t0 = time.time()
+    if os.path.exists("cachehigh"):
+        prev_cache = pickle.load(open('cachehigh', 'rb'))
+        if len(prev_cache) > n_cache: # if it has been updated by another AI
+            for key, value in prev_cache.items():
+                if key not in U_stone.cachehigh:
+                    U_stone.cachehigh[key] = value
     if len(U_stone.cachehigh) > n_cache:
         pickle.dump(U_stone.cachehigh, open('cachehigh', 'wb'))
-    print("Finished with %d high quality U_stone.cache."%len(U_stone.cachehigh))
+    t1 = time.time()
+    print("Finished with %d high quality U_stone.cache in %.2f seconds."% (len(U_stone.cachehigh), t1-t0))
 
 
 def benchmark():
