@@ -288,10 +288,8 @@ def main():
             print("%-7s | %7d"%(name, nwin))
     # Let the players finish their game
     for p in game.players:
-        try:
+        if hasattr(p, 'finish'):
             p.finish()
-        except:
-            pass
-
+            
 if __name__ == "__main__":
     main()
