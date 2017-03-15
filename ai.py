@@ -7,6 +7,7 @@ import os, pickle
 import numba
 import numpy as np
 
+board_size = 15
 def strategy(state):
     """ AI's strategy """
 
@@ -42,16 +43,18 @@ def strategy(state):
 
     alpha = -1.0
     beta = 2.0
-    global move_interest
 
+    global move_interest
+    # move the root of move_interest tree to the current node
+    # move_interest = lv1_interest_matrices[last_move]
     try:
-        move_interest *= 0.8
+        move_interest *= 0.9 # already updated to lv1 move_interest by lv0 best_action_q()
     except:
         move_interest = np.zeros((board_size+1)**2).reshape(board_size+1, board_size+1)
 
     U_stone.cache = U_stone.cachehigh.copy()
     #U_stone.cache = dict()
-    best_move, best_q = best_action_q(state, last_move, alpha, beta, True, 0)
+    best_move, best_q = best_action_q(state, last_move, move_interest, alpha, beta, True, 0)
 
     # If the win rate of this turn is lower than my last turn, means that my previous estimate was wrong:
     #if best_q < last_q:
@@ -61,14 +64,16 @@ def strategy(state):
 
     return best_move
 
-level_max_n = [250, 90, 30, 12, 8, 6, 4, 3, 2, 2, 2, 2, 2, 2, 2]
-def best_action_q(state, last_move, alpha, beta, maximizing_player, level):
+move_interest = np.zeros((board_size+1)**2).reshape(board_size+1, board_size+1)
+
+level_max_n = [100, 50, 20, 12, 10, 5, 4, 3, 2, 2, 2, 2, 2, 2, 2]
+def best_action_q(state, last_move, move_interest, alpha, beta, maximizing_player, level):
     "Return the optimal action for a state"
     #global estimate_cache, best_lv1, pruned, computed
     #my_stones, opponent_stones = state
     best_move = (0,0) # admit defeat if all moves have 0 win rate
     #all_stones = my_stones | opponent_stones
-    possible_moves = available_positions(state, 2-int(level>1))
+    possible_moves = available_positions(state, 2)
     #if level == 0:
     #    print(len(possible_moves))
     n_candidates = min(len(possible_moves), level_max_n[level])
@@ -79,19 +84,21 @@ def best_action_q(state, last_move, alpha, beta, maximizing_player, level):
         #n_candidates = 15 - level
     if n_candidates == 1:
         current_move = possible_moves.pop()
-        if level == 0: # We have no choice here
-            return current_move, 0.5
-        q = Q_stone(state, current_move, alpha, beta, maximizing_player, level)
+        #if level == 0: # We have no choice here
+        #    return current_move, 0.5
+        q = Q_stone(state, current_move, move_interest, alpha, beta, maximizing_player, level)
         return current_move, q
+
+    local_interest = move_interest.copy() * 0.9 # current move_interest to be passed to next level
     interest_scale = 0.8 ** (int(level/2))
     if maximizing_player:
         max_q = 0.0
         for _ in xrange(n_candidates):
             possible_moves = sorted(possible_moves, key=lambda m: move_interest[m])
             current_move = possible_moves.pop()
-            q = Q_stone(state, current_move, alpha, beta, maximizing_player, level+1)
-            if q * interest_scale > move_interest[current_move]:
-                move_interest[current_move] = q * interest_scale
+            q = Q_stone(state, current_move, local_interest, alpha, beta, maximizing_player, level+1)
+            if q > move_interest[current_move]: # update the parent's interest matrix
+                move_interest[current_move] = q
             if q > alpha: alpha = q
             if q > max_q:
                 if level == 0:
@@ -106,9 +113,9 @@ def best_action_q(state, last_move, alpha, beta, maximizing_player, level):
         for _ in xrange(n_candidates):
             possible_moves = sorted(possible_moves, key=lambda m: move_interest[m])
             current_move = possible_moves.pop()
-            q = Q_stone(state, current_move, alpha, beta, maximizing_player, level+1)
-            if (1 - q) * interest_scale > move_interest[current_move]:
-                move_interest[current_move] = (1 - q) * interest_scale
+            q = Q_stone(state, current_move, local_interest, alpha, beta, maximizing_player, level+1)
+            if (1 - q) > move_interest[current_move]:
+                move_interest[current_move] = (1 - q)
             if q < beta: beta = q
             if q < min_q:
                 min_q = q
@@ -116,6 +123,9 @@ def best_action_q(state, last_move, alpha, beta, maximizing_player, level):
             if q == 0.0 or beta <= alpha:
                 break
         best_q = min_q
+    # update the global interest matrix with level 0 local_interest
+    if level is 0:
+        np.copyto(move_interest, local_interest)
     return best_move, best_q
 
 @numba.jit(nopython=True, nogil=True)
@@ -172,7 +182,7 @@ def available_positions2(state):
     return positions
 
 #@numba.jit(nopython=True, nogil=True)
-def Q_stone(state, current_move, alpha, beta, maximizing_player, level):
+def Q_stone(state, current_move, move_interest, alpha, beta, maximizing_player, level):
     my_stones, opponent_stones = state
     if maximizing_player:
         new_my_stones = my_stones.copy()
@@ -183,10 +193,10 @@ def Q_stone(state, current_move, alpha, beta, maximizing_player, level):
         new_opponent_stones.add(current_move)
         opponent_stones = new_opponent_stones
     state = (my_stones, opponent_stones)
-    return U_stone(state, current_move, alpha, beta, maximizing_player, level)
+    return U_stone(state, current_move, move_interest, alpha, beta, maximizing_player, level)
 
 #@numba.jit(nopython=True, nogil=True)
-def U_stone(state, last_move, alpha, beta, maximizing_player, level):
+def U_stone(state, last_move, move_interest, alpha, beta, maximizing_player, level):
     my_stones, opponent_stones = state
     if maximizing_player is True: # put the stones of the current player first
         key = (frozenset(my_stones), frozenset(opponent_stones))
@@ -201,7 +211,7 @@ def U_stone(state, last_move, alpha, beta, maximizing_player, level):
     except:
         pass
 
-    MC_start_level = 9
+    MC_start_level = 7
     #if maximizing_player and i_win(my_stones, last_move):
     if maximizing_player is True and i_will_win(my_stones, opponent_stones, last_move):
         return 1.0
@@ -219,7 +229,7 @@ def U_stone(state, last_move, alpha, beta, maximizing_player, level):
     elif level >= MC_start_level:
         result = MC_estimate_U(state, maximizing_player, 19, 20)
     else:
-        best_move, best_q = best_action_q(state, last_move, alpha, beta, not maximizing_player, level)
+        best_move, best_q = best_action_q(state, last_move, move_interest, alpha, beta, not maximizing_player, level)
         #if best_q == 1.0 or best_q == 0.0:
         #    if maximizing_player is True:
         #        U_stone.cachehigh[key] = best_q
@@ -561,14 +571,22 @@ def test():
     t1 = time.time()
     print("--- %f s  ---" %(t1-t0))
 
-def test2():
-    my_stones = {(6,7),(7,8),(8,8),(8,9)}
-    opponent_stones = {(5,7),(6,8),(7,9),(8,10)}
-    global board_size
-    board_size = 15
-    state = (my_stones, opponent_stones)
-    print(i_win(opponent_stones, (4,6)))
-    print(available_positions(state))
+
+def test3():
+    my_stones = {(6,7),(7,8),(8,5),(8,7),(8,8),(8,9)}
+    #my_stones = {(6,7),(7,8),(8,5),(8,7),(8,8),(8,9), (9,5)}
+    #my_stones = {(6,7),(7,8),(8,5),(8,7),(8,8),(8,9), (6,10)}
+    opponent_stones = {(5,6),(7,6),(7,7),(7,9),(8,6),(9,8)}
+    board = (my_stones, opponent_stones)
+    playing = 0
+    last_move = (8,6)
+    #playing = 1
+    #last_move = (6,10)
+    state = (board, last_move, playing, 15)
+    global move_interest
+    move_interest[6,9] = 1.0
+    #move_interest[6,6] = 1.0
+    print(strategy(state))
 
 def check():
     global board_size
@@ -615,5 +633,6 @@ def check():
 if __name__ == '__main__':
     import time
     check()
-    benchmark()
-    benchmark2()
+    test3()
+    #benchmark()
+    #benchmark2()
