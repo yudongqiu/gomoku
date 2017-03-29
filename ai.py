@@ -41,32 +41,59 @@ def strategy(state):
 
     state = (my_stones, opponent_stones)
 
-    alpha = -1.0
-    beta = 2.0
+
+
+
+    global lv1_win_rates
+    if last_move in lv1_win_rates:
+        print("Calculated Move: %.3f" %lv1_win_rates[last_move])
+    else:
+        print("Didn't know this move!")
+    lv1_win_rates = dict()
 
     global move_interest
-    # move the root of move_interest tree to the current node
-    # move_interest = lv1_interest_matrices[last_move]
-    try:
-        move_interest *= 0.9 # already updated to lv1 move_interest by lv0 best_action_q()
-    except:
-        move_interest = np.zeros((board_size+1)**2).reshape(board_size+1, board_size+1)
+    global lv1_interest_matrices
+    lv1_interest_matrices = dict() # clean the saved lv1 interest matrices
 
-    U_stone.cache = U_stone.cachehigh.copy()
-    #U_stone.cache = dict()
+    # move the root of move_interest tree to the current node
+    #
+    #try:
+    #   move_interest *= 0.9 # already updated to lv1 move_interest by lv0 best_action_q()
+    #except:
+    #    move_interest = np.zeros((board_size+1)**2).reshape(board_size+1, board_size+1)
+
+    #U_stone.cache = U_stone.cachehigh.copy()
+    U_stone.cache = dict()
+    alpha = -1.0
+    beta = 2.0
     best_move, best_q = best_action_q(state, last_move, move_interest, alpha, beta, True, 0)
+
 
     # If the win rate of this turn is lower than my last turn, means that my previous estimate was wrong:
     #if best_q < last_q:
     #    U_stone.cache[]
+
     if best_q == 0:
         return (0,0) # admit defeat if I'm losing
+
+    # update the global move_interest matrix with the lv1
+    # the old global move_interest matrix is discarded here because it's out-of-date
+    #if len(lv1_interest_matrices) > 0:
+    #    move_interest = lv1_interest_matrices[best_move]
+    try:
+        move_interest = lv1_interest_matrices[best_move]
+    except:
+        pass
+        #move_interest *= 0.9
 
     return best_move
 
 move_interest = np.zeros((board_size+1)**2).reshape(board_size+1, board_size+1)
+lv1_interest_matrices = dict()
+lv1_win_rates = dict()
 
-level_max_n = [100, 50, 20, 12, 10, 5, 4, 3, 2, 2, 2, 2, 2, 2, 2]
+level_max_n = [200, 200, 10, 8, 6, 5, 4, 3, 3, 2, 2, 2, 2, 2, 2]
+#level_max_n = [200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200]
 def best_action_q(state, last_move, move_interest, alpha, beta, maximizing_player, level):
     "Return the optimal action for a state"
     #global estimate_cache, best_lv1, pruned, computed
@@ -74,8 +101,7 @@ def best_action_q(state, last_move, move_interest, alpha, beta, maximizing_playe
     best_move = (0,0) # admit defeat if all moves have 0 win rate
     #all_stones = my_stones | opponent_stones
     possible_moves = available_positions(state, 2)
-    #if level == 0:
-    #    print(len(possible_moves))
+
     n_candidates = min(len(possible_moves), level_max_n[level])
 
     #if level > 1 and n_candidates > 10:
@@ -87,22 +113,31 @@ def best_action_q(state, last_move, move_interest, alpha, beta, maximizing_playe
         #if level == 0: # We have no choice here
         #    return current_move, 0.5
         q = Q_stone(state, current_move, move_interest, alpha, beta, maximizing_player, level)
+        # record the opponent's next move's q
+        if level <= 1 and maximizing_player is False:
+            global lv1_win_rates
+            lv1_win_rates[current_move] = q
         return current_move, q
 
-    local_interest = move_interest.copy() * 0.9 # current move_interest to be passed to next level
-    interest_scale = 0.8 ** (int(level/2))
+    local_interest = move_interest.copy() * 0.9 # current move_interest to be passed and modified by next level
+
+    threat_moves = find_threat_positions(state)
+    local_interest[threat_moves] = 0.99
+
     if maximizing_player:
         max_q = 0.0
         for _ in xrange(n_candidates):
-            possible_moves = sorted(possible_moves, key=lambda m: move_interest[m])
+            possible_moves = sorted(possible_moves, key=lambda m: local_interest[m])
             current_move = possible_moves.pop()
             q = Q_stone(state, current_move, local_interest, alpha, beta, maximizing_player, level+1)
             if q > move_interest[current_move]: # update the parent's interest matrix
                 move_interest[current_move] = q
+            #if q > local_interest[current_move]: # update the local interest matrix? seems unnecessary because the child node will do this for me
+            #    local_interest[current_move] = q
             if q > alpha: alpha = q
             if q > max_q:
                 if level == 0:
-                    print(current_move, q, "interest", move_interest[current_move])
+                    print(current_move, q, "interest", local_interest[current_move])
                 max_q = q
                 best_move = current_move
             if q == 1.0 or beta <= alpha:
@@ -111,20 +146,30 @@ def best_action_q(state, last_move, move_interest, alpha, beta, maximizing_playe
     else:
         min_q = 1.0
         for _ in xrange(n_candidates):
-            possible_moves = sorted(possible_moves, key=lambda m: move_interest[m])
+            possible_moves = sorted(possible_moves, key=lambda m: local_interest[m])
             current_move = possible_moves.pop()
             q = Q_stone(state, current_move, local_interest, alpha, beta, maximizing_player, level+1)
             if (1 - q) > move_interest[current_move]:
                 move_interest[current_move] = (1 - q)
+            #if (1 - q) > local_interest[current_move]:
+            #    local_interest[current_move] = (1 - q)
             if q < beta: beta = q
             if q < min_q:
                 min_q = q
                 best_move = current_move
+            if level <= 1:
+                global lv1_win_rates
+                lv1_win_rates[current_move] = q
             if q == 0.0 or beta <= alpha:
                 break
         best_q = min_q
-    # update the global interest matrix with level 0 local_interest
-    if level is 0:
+        if level == 1: #if the opponent can choose where to move
+            global lv1_interest_matrices
+            # save lv 1 local_interest for each lv0 moves
+            lv1_interest_matrices[last_move] = local_interest
+    # if lv1_interest_matrices is empty, means that there is no choice for the opponent, we will use our lv0 local_interest to update the global move_interest
+    if level is 0 and len(lv1_interest_matrices) == 0:
+        # update the global interest matrix with level 0 local_interest (modified by all lv1 calls)
         np.copyto(move_interest, local_interest)
     return best_move, best_q
 
@@ -148,7 +193,7 @@ def available_positions(state, dist=1):
                         positions.add(stone)
     return positions
 
-@numba.jit(nopython=True,nogil=True)
+@numba.jit(nopython=True, nogil=True)
 def near_any_stone(last_move, state, dist):
     r1, c1 = last_move
     for r2, c2 in state[0]:
@@ -158,6 +203,25 @@ def near_any_stone(last_move, state, dist):
         if abs(r2-r1) <= dist and abs(c2-c1) <= dist:
             return True
     return False
+
+@numba.jit(nopython=True, nogil=True)
+def find_threat_positions(state):
+    my_stones, opponent_stones = state
+    my_threats = []
+    opponent_threats = []
+    for x in range(1, board_size+1):
+        for y in range(1, board_size+1):
+            stone = (x,y)
+            if stone not in my_stones and stone not in opponent_stones:
+                if i_will_win(my_stones, stone):
+                    my_threats.append(stone)
+                if i_will_win(opponent_stones, stone):
+                    opponent_threats.append(stone)
+    if len(my_threats) > 0:
+        return my_threats
+    else:
+        return opponent_threats
+
 
 @numba.jit(nopython=True, nogil=True)
 def nearby_avail_positions(this_stone, all_stones):
@@ -248,17 +312,6 @@ def U_stone(state, last_move, move_interest, alpha, beta, maximizing_player, lev
     U_stone.cache[key] = cached_result
 
     return result
-
-
-def cached_MC(state, maximizing_player, n_MC, max_steps):
-    if not hasattr(cached_MC, 'cache'):
-        cached_MC.cache = dict()
-    key = (frozenset(state[0]), frozenset(state[1]))
-    try:
-        return cached_MC.cache[key]
-    except:
-        cached_MC.cache[key] = result = MC_estimate_U(state, maximizing_player, n_MC, max_steps)
-        return result
 
 @numba.jit(nopython=True, nogil=True)
 def MC_estimate_U(state, maximizing_player, n_MC, max_steps):
