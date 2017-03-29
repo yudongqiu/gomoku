@@ -55,12 +55,6 @@ def strategy(state):
     global lv1_interest_matrices
     lv1_interest_matrices = dict() # clean the saved lv1 interest matrices
 
-    # move the root of move_interest tree to the current node
-    #
-    #try:
-    #   move_interest *= 0.9 # already updated to lv1 move_interest by lv0 best_action_q()
-    #except:
-    #    move_interest = np.zeros((board_size+1)**2).reshape(board_size+1, board_size+1)
 
     #U_stone.cache = U_stone.cachehigh.copy()
     U_stone.cache = dict()
@@ -92,37 +86,31 @@ move_interest = np.zeros((board_size+1)**2).reshape(board_size+1, board_size+1)
 lv1_interest_matrices = dict()
 lv1_win_rates = dict()
 
-level_max_n = [200, 200, 10, 8, 6, 5, 4, 3, 3, 2, 2, 2, 2, 2, 2]
+level_max_n = [120, 50, 15, 10, 8, 7, 6, 1, 1, 1, 1, 1, 1, 1, 1]
 #level_max_n = [200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200]
 def best_action_q(state, last_move, move_interest, alpha, beta, maximizing_player, level):
     "Return the optimal action for a state"
-    #global estimate_cache, best_lv1, pruned, computed
-    #my_stones, opponent_stones = state
+    global lv1_win_rates
+    global lv1_interest_matrices
+
     best_move = (0,0) # admit defeat if all moves have 0 win rate
-    #all_stones = my_stones | opponent_stones
     possible_moves = available_positions(state, 2)
-
-    n_candidates = min(len(possible_moves), level_max_n[level])
-
-    #if level > 1 and n_candidates > 10:
-    #    n_candidates = 10
-        #n_candidates = int(10 + n_candidates/10)
-        #n_candidates = 15 - level
-    if n_candidates == 1:
+    if len(possible_moves) == 1:
         current_move = possible_moves.pop()
         #if level == 0: # We have no choice here
         #    return current_move, 0.5
         q = Q_stone(state, current_move, move_interest, alpha, beta, maximizing_player, level)
         # record the opponent's next move's q
         if level <= 1 and maximizing_player is False:
-            global lv1_win_rates
             lv1_win_rates[current_move] = q
         return current_move, q
 
     local_interest = move_interest.copy() * 0.9 # current move_interest to be passed and modified by next level
 
     threat_moves = find_threat_positions(state)
-    local_interest[threat_moves] = 0.99
+    local_interest[zip(*threat_moves)] = 0.99
+
+    n_candidates = min(len(possible_moves), level_max_n[level] + len(threat_moves))
 
     if maximizing_player:
         max_q = 0.0
@@ -158,13 +146,11 @@ def best_action_q(state, last_move, move_interest, alpha, beta, maximizing_playe
                 min_q = q
                 best_move = current_move
             if level <= 1:
-                global lv1_win_rates
                 lv1_win_rates[current_move] = q
             if q == 0.0 or beta <= alpha:
                 break
         best_q = min_q
         if level == 1: #if the opponent can choose where to move
-            global lv1_interest_matrices
             # save lv 1 local_interest for each lv0 moves
             lv1_interest_matrices[last_move] = local_interest
     # if lv1_interest_matrices is empty, means that there is no choice for the opponent, we will use our lv0 local_interest to update the global move_interest
@@ -207,20 +193,24 @@ def near_any_stone(last_move, state, dist):
 @numba.jit(nopython=True, nogil=True)
 def find_threat_positions(state):
     my_stones, opponent_stones = state
-    my_threats = []
-    opponent_threats = []
+    threats = []
+    #my_threats = []
+    #opponent_threats = []
     for x in range(1, board_size+1):
         for y in range(1, board_size+1):
             stone = (x,y)
             if stone not in my_stones and stone not in opponent_stones:
-                if i_will_win(my_stones, stone):
-                    my_threats.append(stone)
-                if i_will_win(opponent_stones, stone):
-                    opponent_threats.append(stone)
-    if len(my_threats) > 0:
-        return my_threats
-    else:
-        return opponent_threats
+                if i_will_win(my_stones, opponent_stones, stone) or i_will_win(opponent_stones, my_stones, stone):
+                    threats.append(stone)
+                #if i_will_win(my_stones, opponent_stones, stone):
+                #    my_threats.append(stone)
+                #if i_will_win(opponent_stones, my_stones, stone):
+                #    opponent_threats.append(stone)
+    return threats
+    #if len(my_threats) > 0:
+    #    return my_threats
+    #else:
+    #    return opponent_threats
 
 
 @numba.jit(nopython=True, nogil=True)
@@ -275,7 +265,7 @@ def U_stone(state, last_move, move_interest, alpha, beta, maximizing_player, lev
     except:
         pass
 
-    MC_start_level = 7
+    MC_start_level = 10
     #if maximizing_player and i_win(my_stones, last_move):
     if maximizing_player is True and i_will_win(my_stones, opponent_stones, last_move):
         return 1.0
@@ -495,7 +485,6 @@ def i_will_win(my_stones, blocking_stones, last_move):
     n_hard_4 = 0 # number of hard 4s found
     for dr, dc in directions:
         #print(dr, dc)
-        #print(n_hard_4)
         line_length = 1 # last_move
         # try to extend in the positive direction (max 4 times)
         ext_r = r
@@ -523,6 +512,7 @@ def i_will_win(my_stones, blocking_stones, last_move):
             line_length_back = skipped_1
         else:
             line_length_back = line_length
+        line_length_no_skip = line_length_back
         for i in range(5-line_length_back):
             ext_r -= dr
             ext_c -= dc
@@ -541,16 +531,19 @@ def i_will_win(my_stones, blocking_stones, last_move):
             if n_hard_4 == 2:
                 return True # two hard 4
 
+        #print("back n_hard_4 = ", n_hard_4)
+
         # extend the forward line to the furthest "unskipped" stone
+        #print("line_length_back", line_length_back)
         if skipped_2 is 0:
-            line_length += line_length_back - 1
+            line_length += line_length_back - line_length_no_skip
         else:
             line_length += skipped_2 - 1
         if line_length >= 4 and skipped_1 is not 0:
             n_hard_4 += 1 # forward hard 4
             if n_hard_4 == 2:
                 return True # two hard 4 or free 4
-        #print('n_hard_4', n_hard_4)
+        #print('total n_hard_4', n_hard_4)
     return False
 
 def initialize():
@@ -682,10 +675,12 @@ def check():
     assert i_will_win({(8,1), (8,2), (8,3), (8,7), (8,8), (8,9)}, {(8,10)}, (8,5)) == True
     # | x - x X x - x o
     assert i_will_win({(8,1), (8,3), (8,5), (8,7)}, {(8,8)}, (8,4)) == True
+
+    assert i_will_win({(8,8), (8,10), (9,9), (11,7), (11,9)}, {(7,7), (7,9), (8,7), (10,8), (11,8)}, (8,9)) == False
     print("All check passed!")
 if __name__ == '__main__':
     import time
     check()
-    test3()
+    #test3()
     #benchmark()
     #benchmark2()
