@@ -57,16 +57,10 @@ def strategy(state):
         for i,j in opponent_stones:
             state[i-1,j-1] = -1
 
-        global lv1_win_rates
-        if last_move in lv1_win_rates:
-            print("Calculated Move: %.3f" %lv1_win_rates[last_move])
+        if strategy.zobrist_code in U_stone.cache:
+            print("Calculated Move: %.3f" %U_stone.cache[strategy.zobrist_code])
         else:
             print("Didn't know this move!")
-        lv1_win_rates = dict()
-
-        global move_interest
-        global lv1_interest_matrices
-        lv1_interest_matrices = dict() # clean the saved lv1 interest matrices
 
         # clear the U cache
         U_stone.cache = dict()
@@ -74,13 +68,10 @@ def strategy(state):
         alpha = -1.0
         beta = 2.0
         possible_moves = available_positions(state, 2)
+        global move_interest
         best_move, best_q = best_action_q(state, strategy.zobrist_code, possible_moves, last_move, move_interest, alpha, beta, 1, 0)
 
-        try:
-            move_interest = lv1_interest_matrices[best_move]
-        except:
-            pass
-            #move_interest *= 0.9
+        move_interest *= 0.9
 
     # update zobrist_code with my move
     strategy.zobrist_code ^= strategy.zobrist_me[best_move]
@@ -89,32 +80,19 @@ def strategy(state):
 
 
 move_interest = np.zeros(board_size**2, dtype=np.float32).reshape(board_size, board_size)
-lv1_interest_matrices = dict()
-lv1_win_rates = dict()
 
-level_max_n = [120, 50, 15, 10, 8, 7, 6, 4, 3, 1, 1, 1, 1, 1, 1]
+level_max_n = [30, 30, 10, 10, 8, 7, 7, 6, 5, 4, 4, 4, 4, 4, 4]
 #level_max_n = [200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200]
 def best_action_q(state, zobrist_code, possible_moves, last_move, move_interest, alpha, beta, player, level):
     "Return the optimal action for a state"
-    global lv1_win_rates
-    global lv1_interest_matrices
 
     best_move = (-1,-1) # admit defeat if all moves have 0 win rate
     my_possible_moves = possible_moves.copy()
     filter_moves(my_possible_moves, state, player)
 
-    #if level <= 2:
-    #    print('lv %d'%level)
-    #    print("last_move", last_move)
-    #    board_show(my_possible_moves)
     if len(my_possible_moves) == 1:
         current_move = my_possible_moves.pop()
-        #if level == 0: # We have no choice here
-        #    return current_move, 0.5
         q = Q_stone(state, zobrist_code, possible_moves, current_move, move_interest, alpha, beta, player, level)
-        # record the opponent's next move's q
-        if level <= 1 and player is -1:
-            lv1_win_rates[current_move] = q
         return current_move, q
 
     # get the local interest
@@ -151,18 +129,9 @@ def best_action_q(state, zobrist_code, possible_moves, last_move, move_interest,
             if q < min_q:
                 min_q = q
                 best_move = current_move
-            if level <= 1:
-                lv1_win_rates[current_move] = q
             if q == 0.0 or beta <= alpha:
                 break
         best_q = min_q
-        if level == 1: #if the opponent can choose where to move
-            # save lv 1 local_interest for each lv0 moves
-            lv1_interest_matrices[last_move] = local_interest
-    # if lv1_interest_matrices is empty, means that there is no choice for the opponent, we will use our lv0 local_interest to update the global move_interest
-    if level is 0 and len(lv1_interest_matrices) == 0:
-        # update the global interest matrix with level 0 local_interest (modified by all lv1 calls)
-        np.copyto(move_interest, local_interest)
     return best_move, best_q
 
 
@@ -213,9 +182,133 @@ def filter_moves(possible_moves, state, player):
 
 @numba.jit(nopython=True, nogil=True)
 def adjust_threat_interests(possible_moves, state, local_interest, player):
-    for stone in possible_moves:
-        if i_will_win(state, stone, -player):
-            local_interest[stone] = 0.99
+    directions = [(1,1), (1,0), (0,1), (1,-1)]
+    for move in possible_moves:
+        r, c = move
+        interest_length = 0
+        for dr, dc in directions:
+            my_line_length = 1 # last_move
+            opponent_line_length = 1
+            # try to extend in the positive direction (max 4 times)
+            ext_r = r
+            ext_c = c
+            skipped_1 = 0
+            my_blocked = False
+            opponent_blocked = False
+            for i in range(4):
+                ext_r += dr
+                ext_c += dc
+                if ext_r < 0 or ext_r >= board_size or ext_c < 0 or ext_c >= board_size:
+                    break
+                elif state[ext_r, ext_c] == player:
+                    if my_blocked is True:
+                        break
+                    else:
+                        my_line_length += 1
+                        opponent_blocked = True
+                elif state[ext_r, ext_c] == -player:
+                    if opponent_blocked is True:
+                        break
+                    else:
+                        opponent_line_length += 1
+                        my_blocked = True
+                elif skipped_1 is 0:
+                    skipped_1 = i + 1 # allow one skip and record the position of the skip
+                else:
+                    break
+
+            # the backward counting starts at the furthest "unskipped" stone
+            forward_my_open = False
+            forward_opponent_open = False
+            if skipped_1 == 0:
+                my_line_length_back = my_line_length
+                opponent_line_length_back = opponent_line_length
+            elif skipped_1 == 1:
+                my_line_length_back = 1
+                opponent_line_length_back = 1
+                forward_my_open = True
+                forward_opponent_open = True
+            else:
+                if my_blocked is False:
+                    my_line_length_back = skipped_1
+                    opponent_line_length_back = 1
+                    forward_my_open = True
+                else:
+                    my_line_length_back = 1
+                    opponent_line_length_back = skipped_1
+                    forward_opponent_open = True
+
+
+            my_line_length_no_skip = my_line_length_back
+            opponent_line_length_no_skip = opponent_line_length_back
+
+            ext_r = r
+            ext_c = c
+            skipped_2 = 0
+            my_blocked = False
+            opponent_blocked = False
+            for i in range(4):
+                ext_r -= dr
+                ext_c -= dc
+                if ext_r < 0 or ext_r >= board_size or ext_c < 0 or ext_c >= board_size:
+                    break
+                elif state[ext_r, ext_c] == player:
+                    if my_blocked is True:
+                        break
+                    else:
+                        my_line_length_back += 1
+                        opponent_blocked = True
+                elif state[ext_r, ext_c] == -player:
+                    if opponent_blocked is True:
+                        break
+                    else:
+                        opponent_line_length_back += 1
+                        my_blocked = True
+                elif skipped_2 is 0:
+                    skipped_2 = i + 1
+                else:
+                    break
+
+
+            backward_my_open = False
+            backward_opponent_open = False
+            if skipped_2 is 0:
+                if my_blocked is False:
+                    my_line_length += my_line_length_back - my_line_length_no_skip
+                else:
+                    opponent_line_length += opponent_line_length_back - opponent_line_length_no_skip
+            elif skipped_2 == 1:
+                backward_my_open = True
+                backward_opponent_open = True
+            else:
+                if my_blocked is False:
+                    my_line_length += skipped_2 - 1
+                    backward_my_open = True
+                else:
+                    opponent_line_length += skipped_2 - 1
+                    backward_opponent_open = True
+
+            if forward_my_open is True and backward_my_open is True:
+                interest_length += min(my_line_length, my_line_length_back)**3
+            elif forward_opponent_open is True and backward_opponent_open is True:
+                interest_length += min(opponent_line_length, opponent_line_length_back)**3
+            elif forward_my_open is True and forward_opponent_open is True:
+                line_length = max(my_line_length, opponent_line_length) - 1
+                interest_length += (line_length) ** 3
+            elif backward_my_open is True and backward_opponent_open is True:
+                line_length_back = max(my_line_length_back, opponent_line_length_back) - 1
+                interest_length += (line_length_back) ** 3
+            elif forward_my_open is True:
+                interest_length += (my_line_length-1) ** 3
+            elif forward_opponent_open is True:
+                interest_length += (opponent_line_length-1) ** 3
+            elif backward_my_open is True:
+                interest_length += (my_line_length_back-1) ** 3
+            elif backward_opponent_open is True:
+                interest_length += (opponent_line_length_back-1) ** 3
+        move_interest = 1.0 - np.exp(-interest_length**2 * 0.002)
+        if local_interest[move] < move_interest:
+            local_interest[move] = move_interest
 
 
 def Q_stone(state, zobrist_code, possible_moves, current_move, move_interest, alpha, beta, player, level):
@@ -253,13 +346,13 @@ def U_stone(state, zobrist_code, possible_moves, last_move, move_interest, alpha
     except:
         pass
 
-    MC_start_level = 7
+    estimate_level = 8
     if i_will_win(state, last_move, player):
         return 1.0 if player == 1 else 0.0
-    elif level >= MC_start_level:
+    elif level >= estimate_level:
         result = estimate_U(state, player)
     else:
-        best_move, best_q = best_action_q(state, possible_moves, last_move, move_interest, alpha, beta, -player, level)
+        best_move, best_q = best_action_q(state, zobrist_code, possible_moves, last_move, move_interest, alpha, beta, -player, level)
         result = best_q
 
     U_stone.cache[zobrist_code] = result
@@ -469,6 +562,8 @@ def initialize():
         strategy.zobrist_opponent = np.random.randint(np.iinfo(np.int64).max, size=board_size**2).reshape(board_size,board_size)
     #if not hasattr(strategy, 'zobrist_code'):
         strategy.zobrist_code = 0
+    if not hasattr(U_stone, 'cache'):
+        U_stone.cache = dict()
 
 def finish():
     return
