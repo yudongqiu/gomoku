@@ -22,70 +22,71 @@ def strategy(state):
     Your strategy will return a position code for the next stone, e.g. (8,7)
     """
 
+    global board_size
+    board, last_move, playing, board_size = state
+
     initialize()
 
-    global board_size
-
-    board, last_move, playing, board_size = state
     other_player = int(not playing)
     my_stones = board[playing]
     opponent_stones = board[other_player]
+
+
     # put the first stone in the center if it's the start of the game
-    center = int((board_size+1)/2)
-    if last_move is None:
-        return (center, center)
-    elif len(my_stones) == 0:
-        # Assuming the first stone was put on the center
-        return random.choice([(center-1, center+1), (center-1,center)])
-        #return random.choice(list(nearby_avail_positions(last_move, opponent_stones)))
-
-    # build new state representation
-    state = np.zeros(board_size**2, dtype=np.int32).reshape(board_size, board_size)
-    for i,j in my_stones:
-        state[i-1,j-1] = 1
-    for i,j in opponent_stones:
-        state[i-1,j-1] = -1
+    center = int((board_size-1)/2)
 
 
 
-    global lv1_win_rates
-    if last_move in lv1_win_rates:
-        print("Calculated Move: %.3f" %lv1_win_rates[last_move])
+    if last_move is None: # if it's the first move of the game
+        best_move = (center, center)
+        strategy.zobrist_code = strategy.zobrist_me[best_move]
+        return (best_move[0]+1, best_move[1]+1)
     else:
-        print("Didn't know this move!")
-    lv1_win_rates = dict()
+        last_move = (last_move[0]-1, last_move[1]-1)
+        # update zobrist_code with opponent last move
+        strategy.zobrist_code ^= strategy.zobrist_opponent[last_move]
 
-    global move_interest
-    global lv1_interest_matrices
-    lv1_interest_matrices = dict() # clean the saved lv1 interest matrices
+    if len(my_stones) == 0:
+        # Assuming the first stone was put on the center
+        best_move = random.choice([(center-1, center+1), (center-1,center)])
+    else:
+        # build new state representation
+        state = np.zeros(board_size**2, dtype=np.int32).reshape(board_size, board_size)
+        for i,j in my_stones:
+            state[i-1,j-1] = 1
+        for i,j in opponent_stones:
+            state[i-1,j-1] = -1
 
+        global lv1_win_rates
+        if last_move in lv1_win_rates:
+            print("Calculated Move: %.3f" %lv1_win_rates[last_move])
+        else:
+            print("Didn't know this move!")
+        lv1_win_rates = dict()
 
-    #U_stone.cache = U_stone.cachehigh.copy()
-    U_stone.cache = dict()
-    alpha = -1.0
-    beta = 2.0
-    possible_moves = available_positions(state, 2)
-    best_move, best_q = best_action_q(state, possible_moves, last_move, move_interest, alpha, beta, 1, 0)
+        global move_interest
+        global lv1_interest_matrices
+        lv1_interest_matrices = dict() # clean the saved lv1 interest matrices
 
+        # clear the U cache
+        U_stone.cache = dict()
 
-    # If the win rate of this turn is lower than my last turn, means that my previous estimate was wrong:
-    #if best_q < last_q:
-    #    U_stone.cache[]
+        alpha = -1.0
+        beta = 2.0
+        possible_moves = available_positions(state, 2)
+        best_move, best_q = best_action_q(state, strategy.zobrist_code, possible_moves, last_move, move_interest, alpha, beta, 1, 0)
 
-    if best_q == 0:
-        return (0,0) # admit defeat if I'm losing
+        try:
+            move_interest = lv1_interest_matrices[best_move]
+        except:
+            pass
+            #move_interest *= 0.9
 
-    # update the global move_interest matrix with the lv1
-    # the old global move_interest matrix is discarded here because it's out-of-date
-    #if len(lv1_interest_matrices) > 0:
-    #    move_interest = lv1_interest_matrices[best_move]
-    try:
-        move_interest = lv1_interest_matrices[best_move]
-    except:
-        pass
-        #move_interest *= 0.9
-    i, j = best_move
-    return (i+1, j+1)
+    # update zobrist_code with my move
+    strategy.zobrist_code ^= strategy.zobrist_me[best_move]
+    # return the best move
+    return (best_move[0]+1, best_move[1]+1)
+
 
 move_interest = np.zeros(board_size**2, dtype=np.float32).reshape(board_size, board_size)
 lv1_interest_matrices = dict()
@@ -93,7 +94,7 @@ lv1_win_rates = dict()
 
 level_max_n = [120, 50, 15, 10, 8, 7, 6, 4, 3, 1, 1, 1, 1, 1, 1]
 #level_max_n = [200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200]
-def best_action_q(state, possible_moves, last_move, move_interest, alpha, beta, player, level):
+def best_action_q(state, zobrist_code, possible_moves, last_move, move_interest, alpha, beta, player, level):
     "Return the optimal action for a state"
     global lv1_win_rates
     global lv1_interest_matrices
@@ -110,7 +111,7 @@ def best_action_q(state, possible_moves, last_move, move_interest, alpha, beta, 
         current_move = my_possible_moves.pop()
         #if level == 0: # We have no choice here
         #    return current_move, 0.5
-        q = Q_stone(state, possible_moves, current_move, move_interest, alpha, beta, player, level)
+        q = Q_stone(state, zobrist_code, possible_moves, current_move, move_interest, alpha, beta, player, level)
         # record the opponent's next move's q
         if level <= 1 and player is -1:
             lv1_win_rates[current_move] = q
@@ -126,7 +127,7 @@ def best_action_q(state, possible_moves, last_move, move_interest, alpha, beta, 
         for _ in xrange(n_candidates):
             my_possible_moves = sorted(my_possible_moves, key=lambda m: local_interest[m])
             current_move = my_possible_moves.pop()
-            q = Q_stone(state, possible_moves, current_move, local_interest, alpha, beta, player, level+1)
+            q = Q_stone(state, zobrist_code, possible_moves, current_move, local_interest, alpha, beta, player, level+1)
             if q > move_interest[current_move]: # update the parent's interest matrix
                 move_interest[current_move] = q
             if q > alpha: alpha = q
@@ -143,7 +144,7 @@ def best_action_q(state, possible_moves, last_move, move_interest, alpha, beta, 
         for _ in xrange(n_candidates):
             my_possible_moves = sorted(my_possible_moves, key=lambda m: local_interest[m])
             current_move = my_possible_moves.pop()
-            q = Q_stone(state, possible_moves, current_move, local_interest, alpha, beta, player, level+1)
+            q = Q_stone(state, zobrist_code, possible_moves, current_move, local_interest, alpha, beta, player, level+1)
             if (1 - q) > move_interest[current_move]:
                 move_interest[current_move] = (1 - q)
             if q < beta: beta = q
@@ -217,25 +218,21 @@ def adjust_threat_interests(possible_moves, state, local_interest, player):
             local_interest[stone] = 0.99
 
 
-def Q_stone(state, possible_moves, current_move, move_interest, alpha, beta, player, level):
+def Q_stone(state, zobrist_code, possible_moves, current_move, move_interest, alpha, beta, player, level):
+    # update the board
     new_state = state.copy()
     new_state[current_move] = player
-    #print("initial_possible_moves")
-    #board_show(possible_moves)
+    # update the zobrist code for the new state
+    if player == 1:
+        move_code = strategy.zobrist_me[current_move]
+    else:
+        move_code = strategy.zobrist_opponent[current_move]
+    new_zobrist_code = zobrist_code ^ move_code
+    # update the possible_moves after current_move
     new_possible_moves = possible_moves.copy()
     update_possible_moves(new_possible_moves, new_state, current_move, 2)
- 
-    #new_possible_moves = update_possible_moves(new_state, current_move, 2)
-    #if level == 1:
-    #    print("current_move", current_move)
-    #    print("new_state")
-    #    print(new_state)
-    #    print("possible_moves")
-    #    board_show(possible_moves)
-    #    print("new_possible_moves")
-    #    board_show(new_possible_moves)
-    #    return 0
-    return U_stone(new_state, new_possible_moves, current_move, move_interest, alpha, beta, player, level)
+
+    return U_stone(new_state, new_zobrist_code, new_possible_moves, current_move, move_interest, alpha, beta, player, level)
 
 @numba.jit(nopython=True, nogil=True)
 def update_possible_moves(possible_moves, state, current_move, dist):
@@ -250,20 +247,11 @@ def update_possible_moves(possible_moves, state, current_move, dist):
             if state[nx, ny] == 0:
                 possible_moves.add((nx,ny))
 
-def U_stone(state, possible_moves, last_move, move_interest, alpha, beta, player, level):
-    #my_stones, opponent_stones = state
-    #if player is 1: # put the stones of the current player first
-    #    key = (frozenset(my_stones), frozenset(opponent_stones))
-    #else:
-    #    key = (frozenset(opponent_stones), frozenset(my_stones))
-    #try:
-    #    cached_result = U_stone.cache[key] # the first player's win rate
-    #    if maximizing_player is True:
-    #        return cached_result
-    #    else:
-    #        return 1.0 - cached_result
-    #except:
-    #    pass
+def U_stone(state, zobrist_code, possible_moves, last_move, move_interest, alpha, beta, player, level):
+    try:
+        return U_stone.cache[zobrist_code]
+    except:
+        pass
 
     MC_start_level = 7
     if i_will_win(state, last_move, player):
@@ -274,22 +262,7 @@ def U_stone(state, possible_moves, last_move, move_interest, alpha, beta, player
         best_move, best_q = best_action_q(state, possible_moves, last_move, move_interest, alpha, beta, -player, level)
         result = best_q
 
-    #if maximizing_player:
-    #    cached_result = result
-    #else:
-    #    cached_result = 1.0 - result
-
-    #if cached_result == 1.0 or cached_result == 0.0:# or level <= MC_start_level - 5:
-    #    # save the high quality
-    #    U_stone.cachehigh[key] = cached_result
-    #U_stone.cache[key] = cached_result
-    #if (result == 1 or result == 0) and level < 2:
-    #    print(state)
-    #    print(last_move)
-    #    print(player)
-    #    print(result)
-
-
+    U_stone.cache[zobrist_code] = result
     return result
 
 
@@ -489,17 +462,13 @@ def i_will_win(state, last_move, player):
     return False
 
 def initialize():
-    return
-    if not hasattr(U_stone, 'cachehigh'):
-        t0 = time.time()
-        if os.path.exists("cachehigh"):
-            U_stone.cachehigh = pickle.load(open('cachehigh', 'rb'))
-        else:
-            U_stone.cachehigh = dict()
-        global n_cache
-        n_cache = len(U_stone.cachehigh)
-        t1 = time.time()
-        #print("Initialized with %d high quality U_stone.cache in %.2f seconds." % (n_cache, t1-t0))
+    # initialize zobrist for u caching
+    if not hasattr(strategy, 'zobrist_me'):
+        strategy.zobrist_me = np.random.randint(np.iinfo(np.int64).max, size=board_size**2).reshape(board_size,board_size)
+    #if not hasattr(strategy, 'zobrist_opponent'):
+        strategy.zobrist_opponent = np.random.randint(np.iinfo(np.int64).max, size=board_size**2).reshape(board_size,board_size)
+    #if not hasattr(strategy, 'zobrist_code'):
+        strategy.zobrist_code = 0
 
 def finish():
     return
