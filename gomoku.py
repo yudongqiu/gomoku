@@ -109,9 +109,9 @@ class Gomoku(object):
                     if self.fastmode < 2: print("Winner is %s"%winner)
                     return winner
                 self.last_move = action
-                if self.place_stone():
+                if self.place_stone() is True:
                     break
-                elif i_try == max_try-1:
+                if i_try == max_try-1:
                     if self.fastmode < 2: print("Player %s has made %d illegal moves, he lost."%(current_player.name, max_try))
                     winner = other_player.name
                     if self.fastmode < 2: print("Winner is %s"%winner)
@@ -136,12 +136,17 @@ class Gomoku(object):
             return False
         # check if this position is already taken
         taken_pos = self.board[0] | self.board[1]
-        if self.last_move in taken_pos:
+        if len(taken_pos) == 0:
+            # if this is the very first move, it must be on the center
+            center = int((self.board_size+1)/2)
+            if r != center or c != center:
+                print("This is the first move, please put it on the center (%s%s)!"% (str(center),chr(center+96)))
+                return False
+        elif self.last_move in taken_pos:
             print("This position is already taken!")
             return False
-        else:
-            self.board[self.playing].add(self.last_move)
-            return True
+        self.board[self.playing].add(self.last_move)
+        return True
 
     def check_winner(self):
         r, c = self.last_move
@@ -228,6 +233,8 @@ class Player(object):
         for t in range(3):
             try:
                 s = raw_input('Please place stone, enter code like "8h":  ')
+                if any(phrase in s for phrase in ['giveup','throw','admit']):
+                    break
                 r, c = s[:-1], s[-1]
                 r = int(r)
                 c = ord(c) - 96
@@ -290,6 +297,6 @@ def main():
     for p in game.players:
         if hasattr(p, 'finish'):
             p.finish()
-            
+
 if __name__ == "__main__":
     main()
