@@ -362,6 +362,8 @@ def U_stone(state, zobrist_code, possible_moves, last_move, move_interest, alpha
 @numba.jit(nopython=True, nogil=True)
 def estimate_U(state, player):
     u = 0.0
+    my_max_n = 0
+    opponent_max_n = 0
     for i in range(board_size):
         for j in range(board_size):
             # horizontal wins --
@@ -379,8 +381,12 @@ def estimate_U(state, player):
                         break
                 if my_blocked is False:
                     u += 3 ** my_n
+                    if my_n > my_max_n:
+                        my_max_n = my_n
                 if opponent_blocked is False:
                     u -= 3 ** opponent_n
+                    if opponent_n > opponent_max_n:
+                        opponent_max_n = opponent_n
             # vertical wins |
             if i <= board_size - 5:
                 my_blocked, opponent_blocked = False, False
@@ -396,8 +402,12 @@ def estimate_U(state, player):
                         break
                 if my_blocked is False:
                     u += 3 ** my_n
+                    if my_n > my_max_n:
+                        my_max_n = my_n
                 if opponent_blocked is False:
                     u -= 3 ** opponent_n
+                    if opponent_n > opponent_max_n:
+                        opponent_max_n = opponent_n
             # left oblique wins /
             if i <= board_size - 5 and j >= 4:
                 my_blocked, opponent_blocked = False, False
@@ -413,8 +423,12 @@ def estimate_U(state, player):
                         break
                 if my_blocked is False:
                     u += 3 ** my_n
+                    if my_n > my_max_n:
+                        my_max_n = my_n
                 if opponent_blocked is False:
                     u -= 3 ** opponent_n
+                    if opponent_n > opponent_max_n:
+                        opponent_max_n = opponent_n
             # right oblique wins \
             if i <= board_size - 5 and j <= board_size - 5:
                 my_blocked, opponent_blocked = False, False
@@ -430,13 +444,25 @@ def estimate_U(state, player):
                         break
                 if my_blocked is False:
                     u += 3 ** my_n
+                    if my_n > my_max_n:
+                        my_max_n = my_n
                 if opponent_blocked is False:
                     u -= 3 ** opponent_n
-    u -= player * 2
+                    if opponent_n > opponent_max_n:
+                        opponent_max_n = opponent_n
+    if player == 1: # next move is opponent
+        longer = 2 * (3 **opponent_max_n)  # one of the longest can get 1 longer
+        block = 3 ** my_max_n
+        u -= max(longer, block)
+    else: # next move is me
+        longer = 2 * (3 ** my_max_n)
+        block = 3 ** opponent_max_n
+        u += max(longer, block)
+
     if u > 0:
-        result = 1.0 - 0.5 * np.exp(-u * 0.01)
+        result = 1.0 - 0.5 * np.exp(-u**2 * 0.0001)
     else:
-        result = np.exp(u * 0.01) * 0.5
+        result = 0.5 * np.exp(-u**2 * 0.0001)
     return result
 
 
