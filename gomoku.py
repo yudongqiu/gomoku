@@ -1,10 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # -- coding: utf-8 --
 
 #==========================
 #=      Gomoku Game       =
 #==========================
 
+from __future__ import print_function, division
 import os, sys, random, time, copy, collections
 from functools import update_wrapper
 
@@ -73,11 +74,11 @@ class Gomoku(object):
         self.board = (set(), set())
 
     def print_board(self):
-        print ' '*4 + ' '.join([chr(97+i) for i in xrange(self.board_size)])
-        print ' '*3 + '='*(2*self.board_size)
-        for x in xrange(1, self.board_size+1):
+        print(' '*4 + ' '.join([chr(97+i) for i in range(self.board_size)]))
+        print(' '*3 + '='*(2*self.board_size))
+        for x in range(1, self.board_size+1):
             row = ['%2s|'%x]
-            for y in xrange(1, self.board_size+1):
+            for y in range(1, self.board_size+1):
                 if (x,y) in self.board[0]:
                     c = 'x'
                 elif (x,y) in self.board[1]:
@@ -87,7 +88,7 @@ class Gomoku(object):
                 if (x,y) in self.winning_stones or (x,y) == self.last_move:
                     c = colored(c, 'green')
                 row.append(c)
-            print ' '.join(row)
+            print(' '.join(row))
 
     def play(self):
         if self.fastmode < 2:  print("Game Start!")
@@ -233,6 +234,11 @@ class Player(object):
         for t in range(3):
             try:
                 s = raw_input('Please place stone, enter code like "8h":  ')
+                if s == 'pickle_state':
+                    import pickle
+                    pickle.dump(state, open('debug.state','wb'))
+                    print("state saved!")
+                    continue
                 if any(phrase in s for phrase in ['giveup','throw','admit']):
                     break
                 r, c = s[:-1], s[-1]
