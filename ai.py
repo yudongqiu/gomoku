@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from __future__ import print_function
+from __future__ import print_function, division
 import itertools, time, copy
 import collections, random
 import os, pickle
@@ -92,6 +92,8 @@ def best_action_q(state, zobrist_code, possible_moves, last_move, move_interest,
 
     if len(my_possible_moves) == 1:
         current_move = my_possible_moves.pop()
+        if level == 0 and player == 1:
+            return current_move, 0.5
         q = Q_stone(state, zobrist_code, possible_moves, current_move, move_interest, alpha, beta, player, level)
         return current_move, q
 
