@@ -46,10 +46,6 @@ def strategy(state):
         # update zobrist_code with opponent last move
         strategy.zobrist_code ^= strategy.zobrist_opponent[last_move]
 
-    if len(my_stones) == 0:
-        # Assuming the first stone was put on the center
-        best_move = random.choice([(center-1, center+1), (center-1,center)])
-    else:
         # build new state representation
         state = np.zeros(board_size**2, dtype=np.int32).reshape(board_size, board_size)
         for i,j in my_stones:
@@ -62,12 +58,17 @@ def strategy(state):
         else:
             print("Didn't know this move!")
 
+        if len(my_stones) == 0:
+            level = 8
+        else:
+            level = 0
+
         # clear the U cache
         U_stone.cache = dict()
 
         alpha = -1.0
         beta = 2.0
-        best_move, best_q = best_action_q(state, strategy.zobrist_code, last_move, alpha, beta, 1, 0)
+        best_move, best_q = best_action_q(state, strategy.zobrist_code, last_move, alpha, beta, 1, level)
 
 
     # update zobrist_code with my move
