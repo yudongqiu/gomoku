@@ -6,8 +6,9 @@
 #==========================
 
 from __future__ import print_function, division
-import os, sys, random, time, copy, collections
+import os, sys, time, collections
 from functools import update_wrapper
+import pickle
 
 def decorator(d):
     "Make function d a decorator: d wraps a function fn."
@@ -71,6 +72,9 @@ class Gomoku(object):
     def state(self):
         return (self.board, self.last_move, self.playing, self.board_size)
 
+    def load_state(self, state):
+        (self.board, self.last_move, self.playing, self.board_size) = state
+
     def reset(self):
         self.board = (set(), set())
 
@@ -93,7 +97,7 @@ class Gomoku(object):
 
     def play(self):
         if self.fastmode < 2:  print("Game Start!")
-        i_turn = 0
+        i_turn = len(self.board[0]) + len(self.board[1])
         new_step = None
         while True:
             if self.fastmode < 2:  print("----- Turn %d -------" % i_turn)
@@ -237,9 +241,8 @@ class Player(object):
             try:
                 s = raw_input('Please place stone, enter code like "8h":  ')
                 if s == 'pickle_state':
-                    import pickle
-                    pickle.dump(state, open('debug.state','wb'))
-                    print("state saved!")
+                    pickle.dump(state, open('saved.state','wb'))
+                    print("Current game state saved to saved.state!")
                     continue
                 if any(phrase in s for phrase in ['giveup','throw','admit']):
                     break
@@ -262,6 +265,7 @@ def main():
     parser.add_argument('--fast', action='store_true', help='Run the game in fast mode.')
     parser.add_argument('-n', '--ngames', type=int, help='Play a number of games to gather statistics.')
     parser.add_argument('--fixorder', action='store_true', help='Fix the order of players in a multi-game series.')
+    parser.add_argument('--load', help='Load a previously saved state to continue the game.')
     args = parser.parse_args()
 
     # fix the .py after player names
@@ -271,7 +275,10 @@ def main():
     assert len(players) == 2, "Gomoku can only be played with 2 players."
 
 
-    game = Gomoku(board_size=args.board_size, players=players, fastmode=args.fast)
+    game = Gomoku(board_size=args.board_size, players=players, fastmode=args.fast, first_center=args.first_center)
+    if args.load:
+        state = pickle.load(open(args.load,'rb'))
+        game.load_state(state)
 
     if args.ngames is None:
         game.play()
