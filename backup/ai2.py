@@ -78,7 +78,7 @@ def strategy(state):
 
 
 
-level_max_n = [20, 30, 10, 15, 8, 8, 6, 6, 4, 4, 4, 4, 4, 4, 4]
+level_max_n = [20, 20, 12, 12, 8, 8, 6, 6, 4, 4, 4, 4, 4, 4, 4]
 #level_max_n = [200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200]
 def best_action_q(state, zobrist_code, last_move, alpha, beta, player, level):
     "Return the optimal action for a state"
