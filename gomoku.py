@@ -53,7 +53,7 @@ class Gomoku(object):
     Two players alternatively put their stone on the board. First one got five in a row wins.
     """
 
-    def __init__(self, board_size=15, players=None, fastmode=False):
+    def __init__(self, board_size=15, players=None, fastmode=False, first_center=None):
         print("*********************************")
         print("*      Welcome to Gomoku !      *")
         print("*********************************")
@@ -65,6 +65,7 @@ class Gomoku(object):
         self.players = [Player(player_name) for player_name in players]
         self.winning_stones = set()
         self.last_move = None
+        self.first_center = first_center
 
     @property
     def state(self):
@@ -137,7 +138,7 @@ class Gomoku(object):
             return False
         # check if this position is already taken
         taken_pos = self.board[0] | self.board[1]
-        if len(taken_pos) == 0:
+        if self.first_center is True and len(taken_pos) == 0:
             # if this is the very first move, it must be on the center
             center = int((self.board_size+1)/2)
             if r != center or c != center:
@@ -256,6 +257,7 @@ def main():
     parser = argparse.ArgumentParser("Play the Gomoku Game!", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('players', nargs='*', default=['AI', 'Player1'], help='Names of Players, the first one plays first.')
     parser.add_argument('--board_size', type=int, default=15, help='Size of the board.')
+    parser.add_argument('--first_center', action='store_true', help='The first move must be on the center of board?')
     parser.add_argument('--fast', action='store_true', help='Run the game in fast mode.')
     parser.add_argument('-n', '--ngames', type=int, help='Play a number of games to gather statistics.')
     parser.add_argument('--fixorder', action='store_true', help='Fix the order of players in a multi-game series.')
