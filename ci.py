@@ -58,10 +58,7 @@ def strategy(state):
         else:
             print("Didn't know this move!")
 
-        if len(my_stones) == 0:
-            level = 8
-        else:
-            level = 0
+        level = max(0, 8-len(my_stones)*4)
 
         # clear the U cache
         U_stone.cache = dict()
@@ -93,6 +90,9 @@ def best_action_q(state, zobrist_code, last_move, alpha, beta, player, level):
     #move_interest_values[xmin:xmax, ymin:ymax] = 3.5
    
     interested_n_moves, limited_move = cached_interesting_moves(state, zobrist_code, player, level_max_n[level])
+    # if we filled up the board, it's a tie
+    if len(interested_n_moves) == 0:
+        return None, 0.5
 
     if limited_move:
         current_move = interested_n_moves[0]
@@ -331,7 +331,7 @@ def find_interesting_moves(state, move_interest_values, player, verbose=False):
                     if backward_opponent_open is True:
                         interest_value += (opponent_line_length_back - 1) ** 3
             # after looking at all directions, record the total interest_value of this move
-            move_interest_values[r, c] += interest_value
+            move_interest_values[r, c] = interest_value
     # all moves have been investigated now see if we have to block first
     if force_to_block is True or exist_will_win_move is True:
         limited_move = True # if i'm force to block or I will win,
