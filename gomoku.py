@@ -98,7 +98,8 @@ class Gomoku(object):
         while True:
             if self.fastmode < 2:  print("----- Turn %d -------" % i_turn)
             self.playing = i_turn % 2
-            self.print_board()
+            if self.fastmode < 2:
+                self.print_board()
             current_player = self.players[self.playing]
             other_player = self.players[int(not self.playing)]
             if self.fastmode < 2: print("--- %s's turn ---" % current_player.name)
@@ -284,12 +285,12 @@ def main():
         game.fastmode = 2
         game_output = open('game_results.txt','w')
         winner_board = collections.OrderedDict([(p.name, 0) for p in game.players])
+        winner_board["Tie"] = 0
         def playone(i):
             game_output.write('Game %-4d .'%(i+1))
             game.reset()
             winner = game.play()
-            for w in winners:
-                winner_board[w] += 1
+            winner_board[winner] += 1
             game_output.write('Game %-4d: Winner is %s\n'%(i+1, winner))
             game_output.flush()
         for i in range(args.ngames):
