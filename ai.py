@@ -96,7 +96,12 @@ def best_action_q(state, zobrist_code, last_move, alpha, beta, player, level):
     ymin = max(0, c-boost_dist)
     ymax = min(board_size, c+boost_dist+1)
     move_interest_values[xmin:xmax, ymin:ymax] = 1.5
-    interested_n_moves, limited_move = find_interesting_moves(state, move_interest_values, player, n_move, verbose=False)
+
+    verbose = False
+    if level == 0:
+        verbose = True
+
+    interested_n_moves, limited_move = find_interesting_moves(state, move_interest_values, player, n_move, verbose)
 
     if limited_move:
         current_move = interested_n_moves[0]
