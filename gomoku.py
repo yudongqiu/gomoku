@@ -119,19 +119,18 @@ class Gomoku(object):
                 if self.place_stone() is True:
                     break
                 if i_try == max_try-1:
-                    if self.fastmode < 2: print("Player %s has made %d illegal moves, he lost."%(current_player.name, max_try))
+                    print("Player %s has made %d illegal moves, he lost."%(current_player.name, max_try))
                     winner = other_player.name
-                    if self.fastmode < 2: print("Winner is %s"%winner)
+                    print("Winner is %s"%winner)
                     return winner
             # check if current player wins
             winner = self.check_winner()
             if winner:
                 self.print_board()
-                if self.fastmode < 2:
-                    print("##########    %s is the WINNER!    #########" % current_player.name)
+                print("##########    %s is the WINNER!    #########" % current_player.name)
                 return winner
             elif i_turn == self.board_size ** 2 - 1:
-                if self.fastmode < 2: print("This game is a tie!")
+                print("This game is a tie!")
                 return "Tie"
             i_turn += 1
 
@@ -240,7 +239,7 @@ class Player(object):
         for t in range(3):
             try:
                 s = raw_input('Please place stone, enter code like "8h":  ')
-                if s == 'pickle_state':
+                if s == 'save':
                     pickle.dump(state, open('saved.state','wb'))
                     print("Current game state saved to saved.state!")
                     continue
@@ -303,8 +302,7 @@ def main():
         for i in range(args.ngames):
             playone(i)
             # switch the order of the players
-            if (i % 2) != 0 and not args.fixorder:
-                game.players = game.players[1:] + [game.players[0]]
+            game.players = game.players[1:] + [game.players[0]]
         game_output.close()
         print("Name    |   Games Won")
         for name, nwin in winner_board.items():
