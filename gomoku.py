@@ -62,10 +62,7 @@ class Gomoku(object):
         self.reset()
         self.board_size = board_size
         self.fastmode = fastmode
-        self.playing = None
         self.players = [Player(player_name) for player_name in players]
-        self.winning_stones = set()
-        self.last_move = None
         self.first_center = first_center
 
     @property
@@ -77,6 +74,9 @@ class Gomoku(object):
 
     def reset(self):
         self.board = (set(), set())
+        self.playing = None
+        self.winning_stones = set()
+        self.last_move = None
 
     def print_board(self):
         print(' '*4 + ' '.join([chr(97+i) for i in range(self.board_size)]))
@@ -113,7 +113,8 @@ class Gomoku(object):
                 if action == (0, 0):
                     print("Player %s admit defeat!" % current_player.name)
                     winner = other_player.name
-                    if self.fastmode < 2: print("Winner is %s"%winner)
+                    self.print_board()
+                    print("Winner is %s"%winner)
                     return winner
                 self.last_move = action
                 if self.place_stone() is True:
@@ -130,8 +131,9 @@ class Gomoku(object):
                 print("##########    %s is the WINNER!    #########" % current_player.name)
                 return winner
             elif i_turn == self.board_size ** 2 - 1:
-                print("This game is a tie!")
-                return "Tie"
+                self.print_board()
+                print("This game is a Draw!")
+                return "Draw"
             i_turn += 1
 
     def place_stone(self):
@@ -263,7 +265,6 @@ def main():
     parser.add_argument('--first_center', action='store_true', help='The first move must be on the center of board?')
     parser.add_argument('--fast', action='store_true', help='Run the game in fast mode.')
     parser.add_argument('-n', '--ngames', type=int, help='Play a number of games to gather statistics.')
-    parser.add_argument('--fixorder', action='store_true', help='Fix the order of players in a multi-game series.')
     parser.add_argument('--load', help='Load a previously saved state to continue the game.')
     args = parser.parse_args()
 
@@ -291,7 +292,7 @@ def main():
         game.fastmode = 2
         game_output = open('game_results.txt','w')
         winner_board = collections.OrderedDict([(p.name, 0) for p in game.players])
-        winner_board["Tie"] = 0
+        winner_board["Draw"] = 0
         def playone(i):
             game_output.write('Game %-4d .'%(i+1))
             game.reset()
@@ -301,8 +302,6 @@ def main():
             game_output.flush()
         for i in range(args.ngames):
             playone(i)
-            # switch the order of the players
-            game.players = game.players[1:] + [game.players[0]]
         game_output.close()
         print("Name    |   Games Won")
         for name, nwin in winner_board.items():
