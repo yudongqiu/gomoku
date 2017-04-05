@@ -133,16 +133,20 @@ def best_action_q(state, zobrist_code, empty_spots_left, last_move, alpha, beta,
 
     if player == 1:
         max_q = 0.0
+        bonus_q = 0.0
         for current_move in interested_moves:
             current_move = (current_move[0], current_move[1])
             q = Q_stone(state, zobrist_code, empty_spots_left, current_move, alpha, beta, player, level+1)
             if q > alpha: alpha = q
-            if q > max_q:
-                max_q = q
+            if level == 0:
+                next_zobrist_code = zobrist_code ^ strategy.zobrist_me[current_move]
+                bonus_q = 0.1 if next_zobrist_code not in strategy.cachehigh else 0.0
+            if q + bonus_q > max_q:
+                max_q = q + bonus_q
                 best_move = current_move
             if q == 1.0 or beta <= alpha:
                 break
-        best_q = max_q
+        best_q = max_q - bonus_q
     elif player == -1:
         min_q = 1.0
         for current_move in interested_moves:
