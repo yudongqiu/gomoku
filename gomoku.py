@@ -294,7 +294,6 @@ def main():
         winner_board = collections.OrderedDict([(p.name, 0) for p in game.players])
         winner_board["Draw"] = 0
         def playone(i):
-            game_output.write('Game %-4d .'%(i+1))
             game.reset()
             winner = game.play()
             winner_board[winner] += 1
