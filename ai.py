@@ -370,7 +370,7 @@ def U_stone(state, zobrist_code, last_move, alpha, beta, player, level):
     except:
         pass
 
-    estimate_level = 10
+    estimate_level = 6
     if i_will_win(state, last_move, player):
         return 1.0 if player == 1 else 0.0
     elif level >= estimate_level:
