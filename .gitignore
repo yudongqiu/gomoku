@@ -1,3 +1,6 @@
 *.pyc
 *.log
 *.pdf
+*.h5
+*.cache
+*.learndata
