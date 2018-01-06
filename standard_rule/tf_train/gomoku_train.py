@@ -312,8 +312,8 @@ def main():
         # collect training data
         train_X, train_Y = prepare_train_data(p1.strategy.learndata, p2.strategy.learndata)
         # delete the learndata
-        p1.strategy.learndata = dict()
-        p2.strategy.learndata = dict()
+        p1.strategy.learndata = p2.strategy.opponent_learndata = dict()
+        p2.strategy.learndata = p1.strategy.opponent_learndata = dict()
         player_A.tf_predict_u.cache, player_B.tf_predict_u.cache = dict(), dict()
         # fit the tf model
         model.trainer.training_state.step = 0 # reset the training step so lr_decay is reset

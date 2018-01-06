@@ -213,10 +213,10 @@ while True:
                 time_spent += time.time() - t_start
                 time_left = args.time * 60 - time_spent
                 print("Time Left: %.1f s" % time_left)
-                if time_left < 60 and player_AI.estimate_level > 2:
+                if time_left < 40 and player_AI.estimate_level > 2:
                     print("Switching to fast mode")
                     player_AI.estimate_level = 2
-                if time_spent < 30 and player_AI.estimate_level > 1:
+                if time_left < 20 and player_AI.estimate_level > 1:
                     print("Switching to ultrafast mode")
                     player_AI.estimate_level = 1
         except pyautogui.FailSafeException:

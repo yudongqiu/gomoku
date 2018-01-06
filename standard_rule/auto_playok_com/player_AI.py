@@ -92,8 +92,8 @@ def strategy(state):
             print("Updated win rate of %d states" % len(strategy.hist_states))
             pickle.dump(strategy.learndata, open('strategy.learndata','wb'))
             print("Saved %d strategy.learndata to disk" % len(strategy.learndata))
-            pickle.dump(tf_predict_u.cache, open('tf_predict_u.cache','wb'))
-            print("Saved %d tf_predict_u.cache to disk" % len(tf_predict_u.cache))
+            #pickle.dump(tf_predict_u.cache, open('tf_predict_u.cache','wb'))
+            #print("Saved %d tf_predict_u.cache to disk" % len(tf_predict_u.cache))
             strategy.started_from_beginning = False # we only update once
         elif best_q != None:
             # record the history states
@@ -190,13 +190,14 @@ def U_stone(state, zobrist_code, empty_spots_left, last_move, alpha, beta, playe
         return U_stone.cache[zobrist_code]
     except:
         pass
+    try:
+        if player == 1:
+            return strategy.learndata[zobrist_code][1]
+    except KeyError:
+        pass
     if i_will_win(state, last_move, player):
         result = 1.0 if player == 1 else -1.0
     elif level >= estimate_level:
-        try:
-            result = strategy.learndata[strategy.zobrist_code][1]
-        except KeyError:
-            pass
         result = tf_predict_u(state, zobrist_code, empty_spots_left, last_move, player)
     else:
         best_move, best_q = best_action_q(state, zobrist_code, empty_spots_left, last_move, alpha, beta, -player, level)
@@ -598,7 +599,7 @@ def initialize():
     strategy.started_from_beginning = False
 
     if not hasattr(tf_predict_u, 'tf_state'):
-        tf_predict_u.tf_state = np.zeros(board_size**2 * 3, dtype=np.int32).reshape(board_size, board_size, 3)
+        tf_predict_u.tf_state = np.zeros(board_size**2 * 3, dtype=np.int8).reshape(board_size, board_size, 3)
 
     if not hasattr(tf_predict_u, 'cache'):
         if os.path.isfile('tf_predict_u.cache'):
@@ -639,17 +640,15 @@ def print_state(state):
         print (' '.join(row))
 
 
-if __name__ == '__main__':
-    import pickle
-    state = pickle.load(open('debug.state','rb'))
-    board, last_move, playing, board_size = state
-    player_stones = board[playing]
-    other = int(not playing)
-    ai_stones = board[other]
-    player_move = (8,9)
-    player_stones.add(player_move)
-    state = (player_stones, ai_stones), player_move, other, board_size
-    strategy(state)
+def test():
+    initialize()
+    state = np.zeros(board_size**2, dtype=np.int8).reshape(board_size, board_size)
+    state[(9,10,11),(11,12,13)] = 1
+    state[(6,8,9,11),(7,9,10,12)] = -1
+    lastmove = (8,9)
+    print_state(state)
+    find_interesting_moves(state, 210, best_action_q.move_interest_values, player=1, n_moves=20, verbose=True) 
+
 
 def draw_state(state):
     board_size = 15
@@ -667,3 +666,18 @@ def draw_state(state):
                 c = '-'
             row.append(c)
         print (' '.join(row))
+
+if __name__ == '__main__':
+    #import pickle
+    #state = pickle.load(open('debug.state','rb'))
+    #board, last_move, playing, board_size = state
+    #player_stones = board[playing]
+    #other = int(not playing)
+    #ai_stones = board[other]
+    #player_move = (8,9)
+    #player_stones.add(player_move)
+    #state = (player_stones, ai_stones), player_move, other, board_size
+    #strategy(state)
+    test()
+
+

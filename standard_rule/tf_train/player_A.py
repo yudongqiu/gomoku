@@ -410,7 +410,10 @@ def U_stone(state, zobrist_code, empty_spots_left, last_move, alpha, beta, playe
         result = 1.0 if player == 1 else -1.0
     elif level >= estimate_level:
         try:
-            result = strategy.learndata[strategy.zobrist_code][1]
+            if player == 1:
+                return strategy.learndata[zobrist_code][1]
+            else:
+                return -strategy.opponent_learn_data[zobrist_code][1]
         except KeyError:
             pass
         result = tf_predict_u(state, zobrist_code, empty_spots_left, last_move, player)
