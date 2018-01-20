@@ -1,0 +1,1 @@
+../gomoku_train.py

@@ -262,6 +262,7 @@ def main():
     parser = argparse.ArgumentParser("Play the Gomoku Game!", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-n', '--n_train', type=int, default=10, help='Play a number of games to gather statistics.')
     parser.add_argument('-t', '--train_step', type=int, default=100, help='Train a new model after this number of games.')
+    parser.add_argument('-e', '--n_epoch', type=int, default=100, help="Number of epochs for each training model")
     args = parser.parse_args()
 
     game = Gomoku(board_size=15, first_center=False)
@@ -278,10 +279,17 @@ def main():
     p1.strategy = player_A.strategy
     p2 = Player('White')
     p2.strategy = player_B.strategy
+    # set up linked learndata and cache (allow AI to look into opponent's data)
+    p1.strategy.learndata = p2.strategy.opponent_learndata = dict()
+    p2.strategy.learndata = p1.strategy.opponent_learndata = dict()
+    player_A.tf_predict_u.cache = player_B.tf_predict_u.cache = dict()
+
 
     game.players = [p1, p2]
     if args.train_step > 1:
         game.fastmode = 2
+    else:
+        player_A.show_q = player_B.show_q = True
 
     def playone(i, game_output, winner_board):
         game.reset()
@@ -311,13 +319,13 @@ def main():
             print("%-7s | %7d"%(name, nwin))
         # collect training data
         train_X, train_Y = prepare_train_data(p1.strategy.learndata, p2.strategy.learndata)
-        # delete the learndata
+        # reset the learndata and cache, release memory
         p1.strategy.learndata = p2.strategy.opponent_learndata = dict()
         p2.strategy.learndata = p1.strategy.opponent_learndata = dict()
-        player_A.tf_predict_u.cache, player_B.tf_predict_u.cache = dict(), dict()
+        player_A.tf_predict_u.cache = player_B.tf_predict_u.cache = dict()
         # fit the tf model
-        model.trainer.training_state.step = 0 # reset the training step so lr_decay is reset
-        model.fit(train_X, train_Y, n_epoch=100, validation_set=0.1, show_metric=True)
+        #model.trainer.training_state.step = 0 # reset the training step so lr_decay is reset
+        model.fit(train_X, train_Y, n_epoch=args.n_epoch, validation_set=0.1, show_metric=True)
         model.save('tf_model')
         print("Model %s saved!" % model_name)
 

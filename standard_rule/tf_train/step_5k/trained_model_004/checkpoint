@@ -1,0 +1,2 @@
+model_checkpoint_path: "/home/qyd/codes/gomoku/standard_rule/tf_train/step_5k/trained_model_004/tf_model"
+all_model_checkpoint_paths: "/home/qyd/codes/gomoku/standard_rule/tf_train/step_5k/trained_model_004/tf_model"

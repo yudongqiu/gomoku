@@ -1,0 +1,2 @@
+model_checkpoint_path: "/home/qyd/codes/gomoku/tf_play/auto_train/trained_model_001/trained_model_001"
+all_model_checkpoint_paths: "/home/qyd/codes/gomoku/tf_play/auto_train/trained_model_001/trained_model_001"

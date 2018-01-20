@@ -6,7 +6,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("datafile", default='data.h5', help='Path to data.h5')
 parser.add_argument('-m', "--model", default='tf_model', help='Path to tf_model')
-parser.add_argument("--step_continue", action='store_true', help='Continue training steps')
+parser.add_argument('-n', '--n_epoch', default=100, type=int, help='n_epoch of training')
 args = parser.parse_args()
 
 
@@ -34,12 +34,10 @@ train_Y = train_Y.reshape(-1,1)
 import construct_dnn
 model = construct_dnn.construct_dnn()
 model.load(args.model)
-if not args.step_continue:
-    model.trainer.training_state.step = 0
 
 os.mkdir('trained_model')
 os.chdir('trained_model')
 
-model.fit(train_X, train_Y, n_epoch=100, validation_set=0.1, show_metric=True)
+model.fit(train_X, train_Y, n_epoch=args.n_epoch, validation_set=0.1, show_metric=True)
 model.save('tf_model')
 print("New model saved!")

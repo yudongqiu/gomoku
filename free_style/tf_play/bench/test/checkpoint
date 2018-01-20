@@ -1,0 +1,2 @@
+model_checkpoint_path: "/home/qyd/codes/gomoku/tf_play/bench/test/m2"
+all_model_checkpoint_paths: "/home/qyd/codes/gomoku/tf_play/bench/test/m2"

@@ -49,8 +49,8 @@ def construct_dnn():
     net = tflearn.fully_connected(net, 256, activation='relu')
     final = tflearn.fully_connected(net, 1, activation='tanh')
     # optmizer
-    sgd = tflearn.optimizers.SGD(learning_rate=0.01, lr_decay=0.95, decay_step=200000)
-    #sgd = tflearn.optimizers.SGD(learning_rate=0.001, lr_decay=0.95, decay_step=500000)
+    #sgd = tflearn.optimizers.SGD(learning_rate=0.01, lr_decay=0.95, decay_step=200000)
+    sgd = tflearn.optimizers.SGD(learning_rate=0.01, lr_decay=0.95, decay_step=500000)
     regression = tflearn.regression(final, optimizer=sgd, loss='mean_square',  metric='R2')
     model = tflearn.DNN(regression)
     return model

@@ -1,0 +1,2 @@
+model_checkpoint_path: "/home/qyd/projects/tf_learn/step_1w/trained_model_001/tf_model"
+all_model_checkpoint_paths: "/home/qyd/projects/tf_learn/step_1w/trained_model_001/tf_model"
