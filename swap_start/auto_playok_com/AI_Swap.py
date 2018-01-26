@@ -46,7 +46,7 @@ def strategy(state):
     # swap start should always have some stones
     assert last_move != None
     # build state and zobrist code
-    state = np.zeros(board_size**2, dtype=np.int32).reshape(board_size, board_size)
+    state = np.zeros(board_size**2, dtype=np.int8).reshape(board_size, board_size)
     strategy.zobrist_code = 0
     for i,j in my_stones:
         state[i-1,j-1] = 1
@@ -62,13 +62,16 @@ def strategy(state):
     start_level = -1
     best_move, best_q = best_action_q(state, strategy.zobrist_code, empty_spots_left, last_move, alpha, beta, 1, start_level)
 
-    state[best_move] = 1
     oppo_zobrist_code = strategy.zobrist_code
+    if oppo_zobrist_code not in strategy.opponent_learndata and best_q != None:
+        strategy.opponent_learndata[oppo_zobrist_code] = [state.copy(), -best_q, 1]
+
+    state[best_move] = 1
     # update zobrist_code with my move
     strategy.zobrist_code ^= strategy.zobrist_me[best_move]
     # store the win rate of this move
     if strategy.zobrist_code not in strategy.learndata and best_q != None:
-        strategy.learndata[strategy.zobrist_code] = [state, best_q, 1]
+        strategy.learndata[strategy.zobrist_code] = [state.copy(), best_q, 1]
     game_finished = False
     new_u = 0
     if i_win(state, best_move, 1):
@@ -87,10 +90,10 @@ def strategy(state):
                 discount = 0.9
                 #discount_factor = 0.9
                 for prev_state_zobrist_code in strategy.hist_states[::-1]:
-                    _ , u, n_visited = strategy.learndata[prev_state_zobrist_code]
+                    st, u, n_visited = strategy.learndata[prev_state_zobrist_code]
                     n_visited += 1
                     new_u = u + discount * (new_u - u) / (n_visited**0.7) # this is the learning rate
-                    strategy.learndata[prev_state_zobrist_code][1:] = new_u, n_visited
+                    strategy.learndata[prev_state_zobrist_code] = st, new_u, n_visited
                     print("Updated U of %d from %f to %f"%(prev_state_zobrist_code, u, new_u))
                     #discount *= discount_factor
                 # also update the strategy.opponent_learndata to be negative u of mine
@@ -112,7 +115,7 @@ def strategy(state):
 
 
 
-level_max_n = [20] * 20
+level_max_n = [30, 30, 20, 20, 20, 20, 15, 15]
 def best_action_q(state, zobrist_code, empty_spots_left, last_move, alpha, beta, player, level):
     "Return the optimal action for a state"
     if empty_spots_left == 0: # Board filled up, it's a tie
@@ -202,6 +205,13 @@ def U_stone(state, zobrist_code, empty_spots_left, last_move, alpha, beta, playe
     if i_will_win(state, last_move, player):
         result = 1.0 if player == 1 else -1.0
     elif level >= estimate_level:
+        try:
+            if player == 1:
+                return strategy.learndata[zobrist_code][1]
+            else:
+                return -strategy.opponent_learndata[zobrist_code][1]
+        except:
+            pass        
         result = tf_predict_u(state, zobrist_code, empty_spots_left, last_move, player)
     else:
         best_move, best_q = best_action_q(state, zobrist_code, empty_spots_left, last_move, alpha, beta, -player, level)
@@ -217,7 +227,7 @@ def tf_predict_u(state, zobrist_code, empty_spots_left, last_move, player):
     move_interest_values.fill(0) # reuse the same array
 
     next_player = -player
-    n_moves = 20
+    n_moves = 25
     interested_moves = find_interesting_moves(state, empty_spots_left, move_interest_values, next_player, n_moves)
     # make sure we solve all the hard 4 so that there're more than one interested_moves
     next_zobrist_code = zobrist_code
@@ -319,7 +329,7 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
     force_to_block = False
     exist_will_win_move = False
     directions = ((1,1), (1,0), (0,1), (1,-1))
-    final_single_move = np.zeros(2, dtype=np.int64).reshape(1,2) # for returning the single move
+    final_single_move = np.zeros(2, dtype=np.int8).reshape(1,2) # for returning the single move
     for r in range(board_size):
         for c in range(board_size):
             if state[r,c] != 0: continue
@@ -351,10 +361,15 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
                         else:
                             opponent_line_length += 1
                             my_blocked = True
-                    elif skipped_1 is 0:
-                        skipped_1 = i + 1 # allow one skip and record the position of the skip
                     else:
-                        break
+                        if skipped_1 is 0:
+                            skipped_1 = i + 1 # allow one skip and record the position of the skip
+                        else:
+                            # peek at the next one and if it might be useful, add some interest
+                            if ((state[ext_r+dr, ext_c+dc] == player) and (my_blocked is False)) or ((state[ext_r+dr, ext_c+dc] == -player) and (opponent_blocked is False)):
+                                interest_value += 15
+                            break
+
                 # the backward counting starts at the furthest "unskipped" stone
                 forward_my_open = False
                 forward_opponent_open = False
@@ -391,10 +406,16 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
                     elif state[ext_r, ext_c] == player:
                         my_line_length_back += 1
                         opponent_blocked = True
-                    elif skipped_2 is 0 and state[ext_r, ext_c] == 0:
-                        skipped_2 = i + 1
-                    else:
+                    elif state[ext_r, ext_c] == -player:
                         break
+                    else:
+                        if skipped_2 is 0:
+                            skipped_2 = i + 1
+                        else:
+                            # peek at the next one and if it might be useful, add some interest
+                            if state[ext_r-dr, ext_c-dc] == player:
+                                interest_value += 15
+                            break
 
                 # see if i'm winning
                 if my_line_length_back == 5:
@@ -427,12 +448,18 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
                         ext_c -= dc
                         if ext_r < 0 or ext_r >= board_size or ext_c < 0 or ext_c >= board_size:
                             break
+                        elif state[ext_r, ext_c] == player:
+                            break
                         elif state[ext_r, ext_c] == -player:
                             opponent_line_length_back += 1
-                        elif skipped_2 is 0 and state[ext_r, ext_c] == 0:
-                            skipped_2 = i + 1
                         else:
-                            break
+                            if skipped_2 is 0:
+                                skipped_2 = i + 1
+                            else:
+                                # peek at the next one and if it might be useful, add some interest
+                                if state[ext_r-dr, ext_c-dc] == -player:
+                                    interest_value += 15
+                                break
                     # extend opponent forward line length to check if there is hard 4
                     if skipped_2 is 0:
                         opponent_line_length += opponent_line_length_back - opponent_line_length_no_skip
@@ -486,7 +513,7 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
         if n_moves > empty_spots_left:
             n_moves = empty_spots_left
         high_interest_idx = np.argsort(flattened_interest)[-n_moves:][::-1]
-        interested_moves = np.empty(n_moves*2, dtype=np.int64).reshape(n_moves, 2)
+        interested_moves = np.empty(n_moves*2, dtype=np.int8).reshape(n_moves, 2)
         interested_moves[:,0] = high_interest_idx // board_size
         interested_moves[:,1] = high_interest_idx % board_size
 

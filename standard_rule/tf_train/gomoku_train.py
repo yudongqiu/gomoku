@@ -324,8 +324,7 @@ def main():
         p2.strategy.learndata = p1.strategy.opponent_learndata = dict()
         player_A.tf_predict_u.cache = player_B.tf_predict_u.cache = dict()
         # fit the tf model
-        #model.trainer.training_state.step = 0 # reset the training step so lr_decay is reset
-        model.fit(train_X, train_Y, n_epoch=args.n_epoch, validation_set=0.1, show_metric=True)
+        model.fit(train_X, train_Y, n_epoch=args.n_epoch, validation_set=0.1, shuffle=True, show_metric=True)
         model.save('tf_model')
         print("Model %s saved!" % model_name)
 

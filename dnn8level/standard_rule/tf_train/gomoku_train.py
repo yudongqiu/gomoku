@@ -1,0 +1,1 @@
+../../../standard_rule/tf_train/gomoku_train.py

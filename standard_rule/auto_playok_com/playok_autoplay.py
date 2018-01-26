@@ -158,7 +158,7 @@ def game_paused(scnshot):
             break
     # if we don't find board in the image, return paused
     if found_board == False:
-        return True
+        return -1
     # check if the red bar is in the center
     cx, cy = scnshot.center
     n_red = 0
@@ -168,8 +168,8 @@ def game_paused(scnshot):
             if image.getpixel((x,y)) == red_color:
                 n_red += 1
                 if n_red > 2:
-                    return True
-    return False
+                    return 1
+    return 0
 
 def check_me_playing(scnshot, maxtime=300):
     state = read_game_state(scnshot)
@@ -245,7 +245,10 @@ def main():
     while True:
         try:
             time.sleep(0.5)
-            if game_paused(scnshot):
+            status = game_paused(scnshot)
+            if status == -1:
+               continue
+            elif status == 1:
                 time.sleep(1)
                 # try to click the start button
                 if click_start(scnshot) == True:
@@ -262,11 +265,11 @@ def main():
                     # check how much time left
                     time_left = total_time - time_spent
                     print("Time Left: %02d:%02d " % divmod(time_left, 60))
-                    tdown2 = min(total_time*0.7, 60)
+                    tdown2 = min(total_time*0.6, 60)
                     if time_left < tdown2 and player_AI.estimate_level > 2:
                         print("Switching to fast mode, AI level = 2")
                         player_AI.estimate_level = 2
-                    tdown1 = min(total_time*0.4, 30)
+                    tdown1 = min(total_time*0.3, 30)
                     if time_left < tdown1 and player_AI.estimate_level > 1:
                         print("Switching to ultrafast mode, AI level = 1")
                         player_AI.estimate_level = 1

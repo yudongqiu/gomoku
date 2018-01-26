@@ -70,7 +70,7 @@ def read_game_state(scnshot):
                 white_stones.add(stone)
             elif color == red_color: # red square means just played
                 # check the color of the new position
-                newpos = (pos[0]+15, pos[1]) if ic < 14 else (pos[0]-15, pos[1])
+                newpos = (pos[0], pos[1]-15) if ir >0 else (pos[0], pos[1]+15)
                 newcolor = image.getpixel(newpos)
                 if newcolor == black_color: # black stone
                     black_stones.add(stone)
@@ -79,8 +79,23 @@ def read_game_state(scnshot):
                     white_stones.add(stone)
                     playing = 0 # black is playing next
                 else:
-                    print(newcolor)
-                    raise RuntimeError("Error when getting last played stone color.")
+                    print("Error when getting last played stone color!")
+                    print(newcolor,"at", newpos,"is not recognized!")
+                    print("Trying one more time after 1s!")
+                    time.sleep(1.0)
+                    image = scnshot.capture()
+                    newcolor = image.getpixel(newpos)
+                    if newcolor == black_color:
+                        black_stones.add(stone)
+                        playing = 1
+                    elif newcolor == white_color:
+                        white_stones.add(stone)
+                        playing = 0
+                    else:
+                        print("Error again!", newcolor,"at",newpos,"not recognized!")
+                        image.save('debug.png')
+                        print("Image saved to debug.png, exiting...")
+                        raise RuntimeError
                 last_move = stone
     board = (black_stones, white_stones)
     state = (board, last_move, playing, board_size)
@@ -197,7 +212,7 @@ def click_start(scnshot):
         pyautogui.moveTo(x1+x, y1+y, duration=0.1)
         pyautogui.click()
         # wait for 10 s for opponent to click start
-        for _ in xrange(22):
+        for _ in xrange(20):
             time.sleep(0.5)
             if game_paused(scnshot) == False:
                 game_started = True
@@ -234,6 +249,8 @@ def choose_swap_start(scnshot, strategy):
     swap_start = 0
     while swap_start == 0:
         swap_start = swap_waiting(scnshot)
+        if game_paused(scnshot) != 0:
+            return 0
         time.sleep(0.5)
     time_spent = 1.0
     if swap_start == 1: # if i'm first
@@ -245,7 +262,8 @@ def choose_swap_start(scnshot, strategy):
             # if opponent chose to place two more stones
             if swap_start > 0:
                 assert swap_start == 2
-                time_spent += swap_choose_side(scnshot, strategy)
+                time.sleep(0.5)
+                time_spent += swap_choose_side(scnshot, strategy, expected=5)
                 break
             # if opponent chose white or black, I should be getting my cursor back
             if read_game_state(scnshot)[1] != None: # if opponent place one move
@@ -253,7 +271,8 @@ def choose_swap_start(scnshot, strategy):
                 if check_cursor_playing(scnshot):
                     break
     else: # if I'm second, choosing side then game starts
-        time_spent += swap_choose_side(scnshot, strategy)
+        time.sleep(0.5)
+        time_spent += swap_choose_side(scnshot, strategy, expected=3)
     return time_spent
 
 
@@ -279,17 +298,22 @@ def check_cursor_playing(scnshot):
 
 def place_first_three_stones(scnshot):
     t_start = time.time()
-    o1 = (4,4), (6,8), (8,8)
+    o1 = (4,4), (6,7), (8,8)
     o2 = (3,6), (7,7), (6,8)
-    o3 = (7,8), (9,10),(9,12)
-    openings = [o1, o2, o3]
+    o3 = (7,8), (9,10),(10,12)
+    o4 = (11,6),(8,10),(9,8)
+    #o5 = (9,3), (5,12),(4,6)
+    openings = [o1, o2, o3, o4]#, o5]
     openmoves = random.choice(openings)
     print("Playing first three moves!", openmoves)
     for move in openmoves:
         place_stone(scnshot, move)
     return time.time() - t_start
 
-def swap_choose_side(scnshot, strategy):
+def swap_choose_side(scnshot, strategy, expected=3):
+    assert expected in (3,5)
+    # number of black and white stones expected
+    eb, ew = (2,1) if expected == 3 else (3,2)
     t_start = time.time()
     x1, y1, x2, y2 = scnshot.border
     w, h = scnshot.width, scnshot.height
@@ -304,32 +328,46 @@ def swap_choose_side(scnshot, strategy):
         print("Choosing white side because I don't see black stones!")
         pyautogui.click(white_button)
     else:
-        found_correct = True
-        if (len(black_stones), len(white_stones)) not in ((2,1),(3,2)):
+        stone_not_seen = False
+        if len(black_stones) != eb or len(white_stones) != ew:
             print("Warning! I'm not seeing all stones, double checking")
             time.sleep(0.7)
             state = read_game_state(scnshot)
-            print_state(state)
             (black_stones, white_stones), last_move, playing, board_size = state
-            if (len(black_stones), len(white_stones)) not in ((2,1),(3,2)):
-                print("Still can't see all stones, will choose white here")
-                pyautogui.click(white_button)
-                found_correct = False
-        if found_correct == True:
-            # replace last move with any black stones
-            last_move = next(iter(black_stones))
-            # set player to white
-            playing = 1
-            state = (black_stones, white_stones), last_move, playing, board_size
-            next_move, q = strategy(state)
-            if q > 0:
-                print("Choosing white side! q = %.2f" % q)
-                pyautogui.click(white_button)
-                time.sleep(0.5)
-                place_stone(scnshot, next_move)
-            else:
-                print("Choosing black side! q = %.2f" % -q)
-                pyautogui.click(black_button)
+            nb, nw = len(black_stones), len(white_stones)
+            if nb != eb or nw != ew:
+                print("Still can't see all stones, very likely they're blocked by white bar!")
+                for i in range(eb-nb):
+                    black_stones.add((14,7+i))
+                    print("Assuming there's a black stone at (14,%d)" % (i+7))
+                for i in range(ew-nw):
+                    white_stones.add((14,9+i))
+                    print("Assuming there's a white stone at (14,%d)" % (i+9))
+                state = (black_stones, white_stones), last_move, playing, board_size
+                print("Final assumed state:")
+                print_state(state)
+                stone_not_seen = True
+        # replace last move with any black stones
+        last_move = next(iter(black_stones))
+        # set player to white
+        playing = 1
+        state = (black_stones, white_stones), last_move, playing, board_size
+        next_move, q = strategy(state)
+        wr = (q+1)/2*100
+        if q > 0:
+            print("Choosing white side! Win Rate: %.1f%%" % wr)
+            pyautogui.click(white_button)
+            time.sleep(0.5)
+            if stone_not_seen == True:
+                print("Seeing the actual state")
+                state = read_game_state(scnshot)
+                print_state(state)
+                next_move, q = strategy(state)
+                print("playing (%d,%d) with win rate %.1f%%" % (next_move[0], next_move[1], wr))
+            place_stone(scnshot, next_move)
+        else:
+            print("Choosing black side! Win Rate: %.1f%%" % (100-wr))
+            pyautogui.click(black_button)
     time_spent = time.time() - t_start
     time.sleep(0.5)
     return time_spent
@@ -406,7 +444,12 @@ def main():
                         print("Switching to ultrafast mode, AI level = 1")
                         AI_Swap.estimate_level = 1
         except (KeyboardInterrupt, pyautogui.FailSafeException):
-            raw_input("Stopped by user, press anykey to continue...")
+            new_total_time = raw_input("Stopped by user, enter new time limit in minutes, or enter to continue...")
+            try:
+                total_time = float(new_total_time)*60
+                print("New total time has been set to %.1f seconds" % total_time)
+            except:
+                pass
 
 if __name__ == '__main__':
     main()

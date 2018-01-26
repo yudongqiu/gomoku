@@ -100,10 +100,10 @@ def strategy(state):
                 discount = 0.9
                 #discount_factor = 0.9
                 for prev_state_zobrist_code in strategy.hist_states[::-1]:
-                    _ , u, n_visited = strategy.learndata[prev_state_zobrist_code]
+                    st , u, n_visited = strategy.learndata[prev_state_zobrist_code]
                     n_visited += 1
                     new_u = u + discount * (new_u - u) / (n_visited**0.7) # this is the learning rate
-                    strategy.learndata[prev_state_zobrist_code][1:] = new_u, n_visited
+                    strategy.learndata[prev_state_zobrist_code] = (st, new_u, n_visited)
                     print("Updated U of %d from %f to %f"%(prev_state_zobrist_code, u, new_u))
 
                 for prev_my_code, prev_opponent_code in zip(strategy.hist_states[::-1], strategy.oppo_hist_states[::-1]):

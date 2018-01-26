@@ -643,7 +643,7 @@ def i_will_win(state, last_move, player):
 
 def initialize():
     # initialize zobrist for u caching
-    if not hasattr(strategy, 'zobrist_me'):
+    if not hasattr(strategy, 'zobrist_black'):
         np.random.seed(20180104) # use the same random matrix for storing
         strategy.zobrist_black = np.random.randint(np.iinfo(np.int64).max, size=board_size**2).reshape(board_size,board_size)
         strategy.zobrist_white = np.random.randint(np.iinfo(np.int64).max, size=board_size**2).reshape(board_size,board_size)
