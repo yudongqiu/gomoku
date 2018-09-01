@@ -68,48 +68,31 @@ def read_game_state(scnshot):
     last_move = None
     playing = 0
     black_color = Color(44, 44, 44)
-    grey_color = Color(220, 220, 220)
     white_color = Color(243, 243, 243)
-    deep_black = Color(39, 39, 39)
-    red_color = Color(253, 23, 30)
     for ir in range(15): # row
         for ic in range(15): # column
             stone = (ir+1, ic+1) # in the AI we count stone position starting from 1
+            # center pos
             pos = (int(shift_x * ic), int(shift_y * ir))
-            color = image.getpixel(pos)
-            if color == black_color: # black stone
+            # shift position to find real color
+            newpos = (pos[0], pos[1]-15) if ir > 0 else (pos[0], pos[1]+15)
+            stone_color = image.getpixel(newpos)
+            if stone_color == black_color: # black stone
                 black_stones.add(stone)
-            elif color == white_color: # white stone
+                # check if it's just played
+                center_color = image.getpixel(pos)
+                if center_color != stone_color:
+                    # white is playing next
+                    playing = 1
+                    last_move = stone
+            elif stone_color == white_color: # white stone
                 white_stones.add(stone)
-            elif color in (red_color, grey_color, deep_black): # just played
-                # check the color of the new position
-                newpos = (pos[0], pos[1]-15) if ir >0 else (pos[0], pos[1]+15)
-                newcolor = image.getpixel(newpos)
-                if newcolor == black_color: # black stone
-                    black_stones.add(stone)
-                    playing = 1 # white is playing next
-                elif newcolor == white_color: # white stone
-                    white_stones.add(stone)
-                    playing = 0 # black is playing next
-                else:
-                    print("Error when getting last played stone color!")
-                    print(newcolor,"at", newpos,"is not recognized!")
-                    print("Trying one more time after 1s!")
-                    time.sleep(1.0)
-                    image = scnshot.capture()
-                    newcolor = image.getpixel(newpos)
-                    if newcolor == black_color:
-                        black_stones.add(stone)
-                        playing = 1
-                    elif newcolor == white_color:
-                        white_stones.add(stone)
-                        playing = 0
-                    else:
-                        print("Error again!", newcolor,"at",newpos,"not recognized!")
-                        image.save('debug.png')
-                        print("Image saved to debug.png, exiting...")
-                        raise RuntimeError
-                last_move = stone
+                # check if it's just played
+                center_color = image.getpixel(pos)
+                if center_color != stone_color:
+                    # black is playing next
+                    playing = 0
+                    last_move = stone
     board = (black_stones, white_stones)
     state = (board, last_move, playing, board_size)
     return state
@@ -203,7 +186,7 @@ def check_me_playing(scnshot2):
     w, h = scnshot2.width, scnshot2.height
     image = scnshot2.capture()
     start = max(w-20, 0)
-    playing_color = (31, 41, 47)
+    playing_color = Color(31, 41, 47)
     my_turn = False
     for posx in range(start, w-3, 2):
         if image.getpixel((posx,h-1)) == playing_color and image.getpixel((posx+2,h-2)) == playing_color:
