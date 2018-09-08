@@ -66,7 +66,7 @@ def read_game_state(scnshot):
     board_size = 15
     shift_x, shift_y = (scnshot.width-1) / (board_size-1), (scnshot.height-1) / (board_size-1)
     last_move = None
-    playing = 0
+    playing = None
     black_color = Color(44, 44, 44)
     white_color = Color(243, 243, 243)
     for ir in range(15): # row
@@ -450,10 +450,12 @@ def main():
                 # check if i'm playing, will wait here if not
                 playing = check_me_playing(scnshot2)
                 if playing != None:
-                    _, _, state_playing, _ = read_game_state(scnshot)
+                    board, last_move, state_playing, board_size = read_game_state(scnshot)
                     if playing != state_playing:
-                        print("Warning: The current player is not consistent!")
-                        print("Rechecking state")
+                        print("Warning: The current player is not consistent! Rechecking state ...")
+                        continue
+                    if last_move == None:
+                        print("Warning: Did not find last move! Rechecking state ...")
                         continue
                     time_spent += play_one_move(scnshot, AI_Swap.strategy)
                     # check how much time left
