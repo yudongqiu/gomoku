@@ -299,17 +299,16 @@ def check_cursor_playing(scnshot):
     new_color = scnshot.capture().getpixel(empty_pos)
     return not (new_color == orig_color)
 
-begin_lib = [[ ( 8, 8),  ( 7, 9), (11,11)],
-             [ (11, 5),  ( 8, 7), (10, 9)],
-             [ ( 8, 6),  ( 5, 8), ( 8,10)],
-             [ ( 8, 6),  ( 6, 8), ( 8,10)],
-             [ (10, 2),  ( 8, 8), (14, 5)],
-             [ (10, 7),  ( 4,11), (10,13)],
-             [ ( 8, 9),  ( 8,13), ( 8, 5)]]
+
 
 def place_first_three_stones(scnshot):
     t_start = time.time()
-    openings = begin_lib
+    o1 = (4,4), (6,7), (8,8)
+    o2 = (3,6), (7,7), (6,9)
+    o3 = (7,8), (9,10),(10,13)
+    o4 = (11,6),(8,10),(9,8)
+    #o5 = (9,3), (5,12),(4,6)
+    openings = [o1, o2, o3, o4]#, o5]
     openmoves = random.choice(openings)
     print("Playing first three moves!", openmoves)
     for move in openmoves:
@@ -408,17 +407,14 @@ def main():
     if args.detect:
         # detect the game board
         print("Detecting the game board...")
-        b1 = detect_board_edge()
-        b2 = (b1[0]+848, b1[1]+64, b1[2]+195, b1[3]-566)
+        x1, y1, x2, y2 = detect_board_edge()
     else:
-        #x1, y1, x2, y2 = (2186,237,3063,1114)
-        #b2 = (3245, 300, 3315, 400)
-        b1 = (2287, 263, 3007, 983)
-        b2 = (3135, 327, 3202, 417)
-    print("Set board in the square (%d,%d) -> (%d,%d)" % b1)
+        x1, y1, x2, y2 = (2186,237,3063,1114)
+        b2 = (3245, 300, 3315, 400)
+    print("Set board in the square (%d,%d) -> (%d,%d)" % (x1,y1,x2,y2))
     print("Please do not move game window from now on.")
 
-    scnshot = ScreenShot(border=b1)
+    scnshot = ScreenShot(border=(x1,y1,x2,y2))
     # 2nd scnshot for checking me playing
     scnshot2 = ScreenShot(border=b2)
     # load the AI player

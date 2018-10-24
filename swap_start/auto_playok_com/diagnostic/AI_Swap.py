@@ -79,7 +79,7 @@ def strategy(state):
 
     if strategy.started_from_beginning is True:
         if game_finished:
-            if new_u == -1.0: # update win rate of lost game
+            if new_u != 1.0: # we don't learn winning games here
                 discount = 0.9
                 #discount_factor = 0.9
                 for prev_state_id in strategy.hist_states[::-1]:
@@ -92,18 +92,14 @@ def strategy(state):
                 # also update the strategy.opponent_learndata to be negative u of mine
                 for prev_state_id, prev_opponent_state_id in zip(strategy.hist_states[::-1], strategy.oppo_hist_states[::-1]):
                     _ , u, n_visited = strategy.learndata[prev_state_id]
-                    # old_u = strategy.opponent_learndata[prev_opponent_state_id][1]
+                    old_u = strategy.opponent_learndata[prev_opponent_state_id][1]
                     strategy.opponent_learndata[prev_opponent_state_id] = None, -u, n_visited # we only use the u value here
-                    # print('Updated opponent U from %f to %f' %(old_u, -u))
+                    print('Updated opponent U from %f to %f' %(old_u, -u))
                 print("Updated win rate of %d states" % (len(strategy.hist_states)-1))
                 pickle.dump(strategy.black_learndata, open('strategy.black_learndata','wb'))
                 pickle.dump(strategy.white_learndata, open('strategy.white_learndata','wb'))
                 print("Saved %d strategy.black_learndata to disk" % len(strategy.black_learndata))
                 print("Saved %d strategy.white_learndata to disk" % len(strategy.white_learndata))
-            else:
-                # save win rates that were calculated
-                pickle.dump(strategy.black_learndata, open('strategy.black_learndata','wb'))
-                pickle.dump(strategy.white_learndata, open('strategy.white_learndata','wb'))
             strategy.started_from_beginning = False # we only update once
         elif best_q != None:
             # record the history states (initialized in the reset() function)
@@ -190,20 +186,25 @@ def Q_stone(state, empty_spots_left, current_move, alpha, beta, player, level):
 
 def U_stone(state, empty_spots_left, last_move, alpha, beta, player, level):
     state_id = state.tobytes()
-    try:
-        if player == 1:
-            return strategy.learndata[state_id][1]
-        else:
-            return -strategy.opponent_learndata[state_id][1]
-    except:
-        pass
-    try:
-        return U_stone.cache[state_id]
-    except:
-        pass
     if i_will_win(state, last_move, player):
         result = 1.0 if player == 1 else -1.0
     elif level >= estimate_level:
+        ts = np.zeros((15,15), dtype=np.int8)
+        ts[(7,9,7,6,6,7,8), (5,5,7,8,9,8,5)] = (1,1,1,-1,-1,-1,1)
+        if np.array_equal(state,ts):
+            import IPython
+            IPython.embed()
+        try:
+            if player == 1:
+                return strategy.learndata[state_id][1]
+            else:
+                return -strategy.opponent_learndata[state_id][1]
+        except:
+            pass
+        try:
+            return U_stone.cache[state_id]
+        except:
+            pass
         result = tf_predict_u(state, empty_spots_left, last_move, player)
     else:
         best_move, best_q = best_action_q(state, empty_spots_left, last_move, alpha, beta, -player, level)
