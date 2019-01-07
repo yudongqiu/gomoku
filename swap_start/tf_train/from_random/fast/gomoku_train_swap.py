@@ -275,13 +275,15 @@ def main():
     parser.add_argument('-t', '--train_step', type=int, default=100, help='Train a new model after this number of games.')
     parser.add_argument('-e', '--n_epoch', type=int, default=100, help="Number of epochs for each training model")
     parser.add_argument('-l', '--begin_lib', help='Begin board library file')
+    parser.add_argument('--new', action='store_true', help='Start from new model')
     args = parser.parse_args()
 
     game = Gomoku(board_size=15, first_center=False)
 
     import construct_dnn
     model = construct_dnn.construct_dnn()
-    model.load('initial_model/tf_model')
+    if not args.new:
+        model.load('initial_model/tf_model')
 
     import player_A, player_B
     player_A.tf_predict_u.model = player_B.tf_predict_u.model = model

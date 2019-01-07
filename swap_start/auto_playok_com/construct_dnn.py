@@ -3,7 +3,7 @@ import tflearn
 
 def construct_dnn():
     tf.reset_default_graph()
-    tflearn.init_graph(num_cores=4, gpu_memory_fraction=0.4)
+    tflearn.init_graph(num_cores=4, gpu_memory_fraction=0.3)
     tflearn.config.init_training_mode()
     img_aug = tflearn.ImageAugmentation()
     img_aug.add_random_90degrees_rotation()

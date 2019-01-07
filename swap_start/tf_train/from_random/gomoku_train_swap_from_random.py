@@ -281,7 +281,7 @@ def main():
 
     import construct_dnn
     model = construct_dnn.construct_dnn()
-    model.load('initial_model/tf_model')
+    # model.load('initial_model/tf_model')
 
     import player_A, player_B
     player_A.tf_predict_u.model = player_B.tf_predict_u.model = model

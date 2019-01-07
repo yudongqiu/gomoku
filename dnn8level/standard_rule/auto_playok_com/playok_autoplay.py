@@ -59,16 +59,16 @@ def read_game_state(scnshot):
     white_color = (243, 243, 243)
     deep_black = (39, 39, 39)
     red_color = (253, 23, 30)
-    for ir in xrange(15): # row
-        for ic in xrange(15): # column
+    for ir in range(15): # row
+        for ic in range(15): # column
             stone = (ir+1, ic+1) # in the AI we count stone position starting from 1
             pos = (int(shift_x * ic), int(shift_y * ir))
             color = image.getpixel(pos)
-            if color == black_color or color == grey_color: # black stone
+            if color == black_color: # black stone
                 black_stones.add(stone)
-            elif color == white_color or color == deep_black: # white stone
+            elif color == white_color: # white stone
                 white_stones.add(stone)
-            elif color == red_color: # red square means just played
+            elif color == red_color or color == grey_color or color == deep_black: # just played
                 # check the color of the new position
                 newpos = (pos[0]+15, pos[1]) if ic < 14 else (pos[0]-15, pos[1])
                 newcolor = image.getpixel(newpos)
@@ -158,7 +158,7 @@ def game_paused(scnshot):
             break
     # if we don't find board in the image, return paused
     if found_board == False:
-        return True
+        return -1
     # check if the red bar is in the center
     cx, cy = scnshot.center
     n_red = 0
@@ -168,16 +168,26 @@ def game_paused(scnshot):
             if image.getpixel((x,y)) == red_color:
                 n_red += 1
                 if n_red > 2:
-                    return True
-    return False
+                    return 1
+    return 0
 
-def check_me_playing(scnshot, maxtime=300):
-    state = read_game_state(scnshot)
-    board, last_move, playing, board_size = state
-    if last_move != None: # if the opponent played
-        return True
+def check_me_playing(scnshot2):
+    w, h = scnshot2.width, scnshot2.height
+    image = scnshot2.capture()
+    start = max(w-20, 0)
+    playing_color = (31, 41, 47)
+    my_turn = False
+    for posx in range(start, w-3, 2):
+        if image.getpixel((posx,h-1)) == playing_color and image.getpixel((posx+2,h-2)) == playing_color:
+            my_turn = True
+    if my_turn == True:
+        c2 = image.getpixel((0,0))
+        if c2 == (255,255,255):
+            return 1 # white player
+        else:
+            return 0
     else:
-        return False
+        return None
 
 def click_start(scnshot):
     x1, y1, x2, y2 = scnshot.border
@@ -197,9 +207,9 @@ def click_start(scnshot):
         pyautogui.moveTo(x1+x, y1+y, duration=0.1)
         pyautogui.click()
         # wait for 10 s for opponent to click start
-        for _ in xrange(22):
-            time.sleep(0.2)
-            if game_paused(scnshot) == False:
+        for _ in range(20):
+            time.sleep(0.5)
+            if game_paused(scnshot) == 0:
                 game_started = True
                 break
     return game_started
@@ -227,10 +237,13 @@ def main():
         x1, y1, x2, y2 = detect_board_edge()
     else:
         x1, y1, x2, y2 = (2186,237,3063,1114)
+        b2 = (3245, 300, 3315, 400)
     print("Set board in the square (%d,%d) -> (%d,%d)" % (x1,y1,x2,y2))
     print("Please do not move game window from now on.")
 
     scnshot = ScreenShot(border=(x1,y1,x2,y2))
+    # 2nd scnshot for checking me playing
+    scnshot2 = ScreenShot(border=b2)
     # load the AI player
     import construct_dnn
     import player_AI
@@ -245,7 +258,10 @@ def main():
     while True:
         try:
             time.sleep(0.5)
-            if game_paused(scnshot):
+            status = game_paused(scnshot)
+            if status == -1:
+               continue
+            elif status == 1:
                 time.sleep(1)
                 # try to click the start button
                 if click_start(scnshot) == True:
@@ -253,25 +269,29 @@ def main():
                     time_spent = 0
                     player_AI.estimate_level = args.level
                     print("Game started with AI level = %d" % args.level)
-                    # try to play one move as black
-                    time_spent += play_one_move(scnshot, player_AI.strategy)
             else:
                 # check if i'm playing, will wait here if not
-                if check_me_playing(scnshot) == True:
+                playing = check_me_playing(scnshot2)
+                if playing != None:
+                    _, _, state_playing, _ = read_game_state(scnshot)
+                    if playing != state_playing:
+                        print("Warning: The current player is not consistent!")
+                        print("Rechecking state")
+                        continue
                     time_spent += play_one_move(scnshot, player_AI.strategy)
                     # check how much time left
                     time_left = total_time - time_spent
                     print("Time Left: %02d:%02d " % divmod(time_left, 60))
-                    tdown2 = min(total_time*0.7, 60)
+                    tdown2 = min(total_time*0.6, 60)
                     if time_left < tdown2 and player_AI.estimate_level > 2:
                         print("Switching to fast mode, AI level = 2")
                         player_AI.estimate_level = 2
-                    tdown1 = min(total_time*0.4, 30)
+                    tdown1 = min(total_time*0.3, 30)
                     if time_left < tdown1 and player_AI.estimate_level > 1:
                         print("Switching to ultrafast mode, AI level = 1")
                         player_AI.estimate_level = 1
         except (KeyboardInterrupt, pyautogui.FailSafeException):
-            new_total_time = raw_input("Stopped by user, enter new time limit in minutes, or enter to continue...")
+            new_total_time = input("Stopped by user, enter new time limit in minutes, or enter to continue...")
             try:
                 total_time = float(new_total_time) * 60
                 print("New total time has been set to %.1f s" % total_time)

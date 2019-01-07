@@ -3,7 +3,7 @@ import tflearn
 
 def construct_dnn():
     tf.reset_default_graph()
-    tflearn.init_graph(num_cores=4, gpu_memory_fraction=0.3)
+    tflearn.init_graph(num_cores=4, gpu_memory_fraction=0.5)
     tflearn.config.init_training_mode()
     img_aug = tflearn.ImageAugmentation()
     img_aug.add_random_90degrees_rotation()
@@ -50,7 +50,7 @@ def construct_dnn():
     final = tflearn.fully_connected(net, 1, activation='tanh')
     # optmizer
     #sgd = tflearn.optimizers.SGD(learning_rate=0.01, lr_decay=0.95, decay_step=200000)
-    sgd = tflearn.optimizers.SGD(learning_rate=0.0001, lr_decay=0.95, decay_step=1000000)
+    sgd = tflearn.optimizers.SGD(learning_rate=0.01, lr_decay=0.95, decay_step=500000)
     regression = tflearn.regression(final, optimizer=sgd, loss='mean_square',  metric='R2')
     model = tflearn.DNN(regression)
     return model

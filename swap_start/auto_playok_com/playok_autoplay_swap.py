@@ -66,30 +66,25 @@ def read_game_state(scnshot):
     board_size = 15
     shift_x, shift_y = (scnshot.width-1) / (board_size-1), (scnshot.height-1) / (board_size-1)
     last_move = None
-    playing = None
-    black_color = Color(44, 44, 44)
-    white_color = Color(243, 243, 243)
+    playing = 0
     for ir in range(15): # row
         for ic in range(15): # column
             stone = (ir+1, ic+1) # in the AI we count stone position starting from 1
             # center pos
             pos = (int(shift_x * ic), int(shift_y * ir))
-            # shift position to find real color
-            newpos = (pos[0], pos[1]-15) if ir > 0 else (pos[0], pos[1]+15)
-            stone_color = image.getpixel(newpos)
-            if stone_color == black_color: # black stone
-                black_stones.add(stone)
-                # check if it's just played
-                center_color = image.getpixel(pos)
-                if center_color != stone_color:
+            stone_type = get_stone_type(image, pos)
+            if stone_type is not None:
+                if stone_type == 'b':
+                    black_stones.add(stone)
+                elif stone_type == 'bl':
+                    black_stones.add(stone)
                     # white is playing next
                     playing = 1
                     last_move = stone
-            elif stone_color == white_color: # white stone
-                white_stones.add(stone)
-                # check if it's just played
-                center_color = image.getpixel(pos)
-                if center_color != stone_color:
+                elif stone_type == 'w':
+                    white_stones.add(stone)
+                elif stone_type == 'wl':
+                    white_stones.add(stone)
                     # black is playing next
                     playing = 0
                     last_move = stone
@@ -97,6 +92,29 @@ def read_game_state(scnshot):
     state = (board, last_move, playing, board_size)
     return state
 
+def get_stone_type(image, pos):
+    """ Get the stone type at pos, 
+    return 'b' for black, 'bl' for black last played,
+           'w' for white, 'wl' for white last played, None if not found """
+    black_color = Color(44, 44, 44)
+    white_color = Color(243, 243, 243)
+    w, h = image.size
+    x, y = pos
+    all_pos = [(x+dx, y+dy) for dx, dy in [(-15, 3), (15, -2), (4, 15), (-3, -15)] if x+dx >= 0 and x+dx <= w and y+dy >= 0 and y+dy <= h]
+    if all(image.getpixel(p) == black_color for p in all_pos):
+        if image.getpixel(pos) != black_color:
+            ret = 'bl'
+        else:
+            ret = 'b'
+    elif all(image.getpixel(p) == white_color for p in all_pos):
+        if image.getpixel(pos) != white_color:
+            ret = 'wl'
+        else:
+            ret = 'w'
+    else:
+        ret = None
+    return ret
+        
 def place_stone(scnshot, move):
     x1, y1, x2, y2 = scnshot.border
     board_size = 15
@@ -234,15 +252,15 @@ def swap_waiting(scnshot):
     white_color = Color(255,255,255)
     n_white = 0
     result = 0
-    for x in range(cx-100, cx+100, 10):
+    shift = int((h-1) / 14)
+    for x in range(cx-shift*2, cx+shift*2, 10):
         if image.getpixel((x,h-2)) == white_color:
             n_white += 1
             if n_white > 2:
                 result = 1
                 break
     n_white = 0
-    shift = int((h-1) / 14)
-    for x in range(cx-100, cx+100, 10):
+    for x in range(cx-shift*2, cx+shift*2, 10):
         if image.getpixel((x,(h-shift))) == white_color:
             n_white += 1
             if n_white > 2:
@@ -304,8 +322,7 @@ begin_lib = [[ ( 8, 8),  ( 7, 9), (11,11)],
              [ ( 8, 6),  ( 5, 8), ( 8,10)],
              [ ( 8, 6),  ( 6, 8), ( 8,10)],
              [ (10, 2),  ( 8, 8), (14, 5)],
-             [ (10, 7),  ( 4,11), (10,13)],
-             [ ( 8, 9),  ( 8,13), ( 8, 5)]]
+             [ (10, 7),  ( 4,11), (10,13)]]
 
 def place_first_three_stones(scnshot):
     t_start = time.time()
