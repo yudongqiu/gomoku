@@ -93,7 +93,7 @@ def read_game_state(scnshot):
     return state
 
 def get_stone_type(image, pos):
-    """ Get the stone type at pos, 
+    """ Get the stone type at pos,
     return 'b' for black, 'bl' for black last played,
            'w' for white, 'wl' for white last played, None if not found """
     black_color = Color(44, 44, 44)
@@ -114,7 +114,7 @@ def get_stone_type(image, pos):
     else:
         ret = None
     return ret
-        
+
 def place_stone(scnshot, move):
     x1, y1, x2, y2 = scnshot.border
     board_size = 15
@@ -128,7 +128,17 @@ def place_stone(scnshot, move):
 
 def play_one_move(scnshot, strategy, verbose=True):
     t_start = time.time()
-    state = read_game_state(scnshot)
+    for _ in range(10):
+        state = read_game_state(scnshot)
+        if get_total_stones(state) == 0:
+            break
+        else:
+            last_move = state[1]
+            if last_move is None:
+                print("Did not find last move, rechecking...")
+                time.sleep(0.5)
+            else:
+                break
     total_stones = get_total_stones(state)
     if verbose:
         print("Current Game Board:")
@@ -209,6 +219,7 @@ def check_me_playing(scnshot2):
     for posx in range(start, w-3, 2):
         if image.getpixel((posx,h-1)) == playing_color and image.getpixel((posx+2,h-2)) == playing_color:
             my_turn = True
+            break
     if my_turn == True:
         c2 = image.getpixel((0,0))
         if c2 == Color(255,255,255):
@@ -431,7 +442,7 @@ def main():
         #x1, y1, x2, y2 = (2186,237,3063,1114)
         #b2 = (3245, 300, 3315, 400)
         b1 = (2287, 263, 3007, 983)
-        b2 = (3135, 327, 3202, 417)
+        b2 = (3151, 327, 3220, 423)
     print("Set board in the square (%d,%d) -> (%d,%d)" % b1)
     print("Please do not move game window from now on.")
 
@@ -439,10 +450,9 @@ def main():
     # 2nd scnshot for checking me playing
     scnshot2 = ScreenShot(border=b2)
     # load the AI player
-    import construct_dnn
+    from tf_model import load_existing_model
     import AI_Swap
-    model = construct_dnn.construct_dnn()
-    model.load('tf_model')
+    model = load_existing_model('tf_model.h5')
     AI_Swap.tf_predict_u.model = model
     AI_Swap.initialize()
 
@@ -478,7 +488,9 @@ def main():
                     if last_move == None:
                         print("Warning: Did not find last move! Rechecking state ...")
                         continue
-                    time_spent += play_one_move(scnshot, AI_Swap.strategy)
+                    t = play_one_move(scnshot, AI_Swap.strategy)
+                    if t is None: continue
+                    time_spent += t
                     # check how much time left
                     time_left = total_time - time_spent
                     print("Time Left: %02d:%02d " % divmod(time_left, 60))
