@@ -6,7 +6,6 @@ import collections, random
 import os, pickle
 import numba
 import numpy as np
-import tflearn
 
 board_size = 15
 estimate_level = 3
@@ -77,7 +76,7 @@ def strategy(state):
         new_u = 0.0
         game_finished = True
 
-    if strategy.started_from_beginning is True:
+    if strategy.started_from_beginning == True:
         if game_finished:
             if new_u == -1.0: # update win rate of lost game
                 discount = 0.9
@@ -340,23 +339,23 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
                     if ext_r < 0 or ext_r >= board_size or ext_c < 0 or ext_c >= board_size:
                         break
                     elif state[ext_r, ext_c] == player:
-                        if my_blocked is True:
+                        if my_blocked == True:
                             break
                         else:
                             my_line_length += 1
                             opponent_blocked = True
                     elif state[ext_r, ext_c] == -player:
-                        if opponent_blocked is True:
+                        if opponent_blocked == True:
                             break
                         else:
                             opponent_line_length += 1
                             my_blocked = True
                     else:
-                        if skipped_1 is 0:
+                        if skipped_1 == 0:
                             skipped_1 = i + 1 # allow one skip and record the position of the skip
                         else:
                             # peek at the next one and if it might be useful, add some interest
-                            if ((state[ext_r+dr, ext_c+dc] == player) and (my_blocked is False)) or ((state[ext_r+dr, ext_c+dc] == -player) and (opponent_blocked is False)):
+                            if ((state[ext_r+dr, ext_c+dc] == player) and (my_blocked == False)) or ((state[ext_r+dr, ext_c+dc] == -player) and (opponent_blocked == False)):
                                 interest_value += 15
                             break
 
@@ -372,7 +371,7 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
                     forward_my_open = True
                     forward_opponent_open = True
                 else:
-                    if my_blocked is False:
+                    if my_blocked == False:
                         my_line_length_back = skipped_1
                         opponent_line_length_back = 1
                         forward_my_open = True
@@ -399,7 +398,7 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
                     elif state[ext_r, ext_c] == -player:
                         break
                     else:
-                        if skipped_2 is 0:
+                        if skipped_2 == 0:
                             skipped_2 = i + 1
                         else:
                             # peek at the next one and if it might be useful, add some interest
@@ -417,7 +416,7 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
                         return final_single_move
 
                 # extend my forward line length to check if there is hard 4
-                if skipped_2 is 0:
+                if skipped_2 == 0:
                     my_line_length += my_line_length_back - my_line_length_no_skip
                 else:
                     my_line_length += skipped_2 - 1
@@ -425,7 +424,7 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
                 backward_my_open = True if skipped_2 > 0 else False
                 backward_opponent_open = False
                 # then try to extend the opponent
-                if opponent_blocked is True:
+                if opponent_blocked == True:
                     if skipped_2 == 1:
                         backward_opponent_open = True
                     skipped_2 = 0 # reset the skipped_2 here to enable the check of opponent 5 later
@@ -443,7 +442,7 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
                         elif state[ext_r, ext_c] == -player:
                             opponent_line_length_back += 1
                         else:
-                            if skipped_2 is 0:
+                            if skipped_2 == 0:
                                 skipped_2 = i + 1
                             else:
                                 # peek at the next one and if it might be useful, add some interest
@@ -451,7 +450,7 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
                                     interest_value += 15
                                 break
                     # extend opponent forward line length to check if there is hard 4
-                    if skipped_2 is 0:
+                    if skipped_2 == 0:
                         opponent_line_length += opponent_line_length_back - opponent_line_length_no_skip
                     else:
                         opponent_line_length += skipped_2 - 1
@@ -465,26 +464,26 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
                         final_single_move[0,0] = r
                         final_single_move[0,1] = c
                         force_to_block = True
-                if force_to_block is False:
+                if force_to_block == False:
                     # if I will win after this move, I won't consider other moves
-                    if forward_my_open is True and my_line_length == 4:
+                    if forward_my_open == True and my_line_length == 4:
                         my_hard_4 += 1
-                    if backward_my_open is True and my_line_length_back == 4:
+                    if backward_my_open == True and my_line_length_back == 4:
                         my_hard_4 += 1
                     if my_hard_4 >= 2:
                         final_single_move[0,0] = r
                         final_single_move[0,1] = c
                         exist_will_win_move = True
-                if force_to_block is False and exist_will_win_move is False:
+                if force_to_block == False and exist_will_win_move == False:
                     # compute the interest_value for other moves
                     # if any line length >= 5, it's an overline so skipped
-                    if (forward_my_open is True) and (my_line_length < 5):
+                    if (forward_my_open == True) and (my_line_length < 5):
                         interest_value += my_line_length ** 4
-                    if (backward_my_open is True) and (my_line_length_back < 5):
+                    if (backward_my_open == True) and (my_line_length_back < 5):
                         interest_value += my_line_length_back ** 4
-                    if (forward_opponent_open is True) and (opponent_line_length < 5):
+                    if (forward_opponent_open == True) and (opponent_line_length < 5):
                         interest_value += opponent_line_length ** 4
-                    if (backward_opponent_open is True) and (opponent_line_length_back < 5):
+                    if (backward_opponent_open == True) and (opponent_line_length_back < 5):
                         interest_value += opponent_line_length_back ** 4
             # after looking at all directions, record the total interest_value of this move
             move_interest_values[r, c] += interest_value
@@ -492,8 +491,8 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
                 n_moves += 1
 
     # all moves have been investigated now see if we have to block first
-    if force_to_block is True or exist_will_win_move is True:
-        if verbose is True:
+    if force_to_block == True or exist_will_win_move == True:
+        if verbose == True:
             print(final_single_move[0,0], final_single_move[0,1], "Only One")
         return final_single_move
     else:
@@ -507,7 +506,7 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
         interested_moves[:,0] = high_interest_idx // board_size
         interested_moves[:,1] = high_interest_idx % board_size
 
-        if verbose is True:
+        if verbose == True:
             print("There are", n_moves, "interested_moves")
             for i in range(n_moves):
                 print(interested_moves[i,0],interested_moves[i,1],'  :  ', flattened_interest[high_interest_idx[i]])
@@ -518,7 +517,7 @@ def find_interesting_moves(state, empty_spots_left, move_interest_values, player
 def i_win(state, last_move, player):
     """ Return true if I just got 5-in-a-row with last_move """
     r, c = last_move
-    # try all 4 directions, the other 4 is included
+    # try all 4 directions, the other 4 == included
     directions = [(1,1), (1,0), (0,1), (1,-1)]
     for dr, dc in directions:
         line_length = 1 # last_move
@@ -534,7 +533,7 @@ def i_win(state, last_move, player):
                 line_length += 1
             else:
                 break
-        if line_length is 6:
+        if line_length == 6:
             continue
         # try to extend in the opposite direction
         ext_r = r
@@ -548,7 +547,7 @@ def i_win(state, last_move, player):
                 line_length += 1
             else:
                 break
-        if line_length is 5:
+        if line_length == 5:
             return True # 5 in a row
     return False
 
@@ -585,7 +584,7 @@ def i_will_win(state, last_move, player):
                 break
             elif state[ext_r, ext_c] == player:
                 line_length += 1
-            elif skipped_1 is 0 and state[ext_r, ext_c] == 0:
+            elif skipped_1 == 0 and state[ext_r, ext_c] == 0:
                 skipped_1 = i+1 # allow one skip and record the position of the skip
             else:
                 break
@@ -594,7 +593,7 @@ def i_will_win(state, last_move, player):
         ext_c = c
         skipped_2 = 0
         # the backward counting starts at the furthest "unskipped" stone
-        if skipped_1 is not 0:
+        if skipped_1 != 0:
             line_length_back = skipped_1
         else:
             line_length_back = line_length
@@ -606,7 +605,7 @@ def i_will_win(state, last_move, player):
                 break
             elif state[ext_r, ext_c] == player:
                 line_length_back += 1
-            elif skipped_2 is 0 and state[ext_r, ext_c] == 0:
+            elif skipped_2 == 0 and state[ext_r, ext_c] == 0:
                 skipped_2 = i + 1
             else:
                 break
@@ -621,7 +620,7 @@ def i_will_win(state, last_move, player):
                 # else there is an empty spot in the middle of 6 stones, it's not a hard 4 any more
         elif line_length_back == 4:
             # here we have only 4 stones, if skipped in back count, it's a hard 4
-            if skipped_2 is not 0:
+            if skipped_2 != 0:
                 n_hard_4 += 1 # backward hard 4
                 if n_hard_4 == 2:
                     return True # two hard 4
@@ -632,7 +631,7 @@ def i_will_win(state, last_move, player):
         else:
             line_length += skipped_2 - 1
         # hard 4 only if forward length is 4, if forward reaches 5 or more, it's going to be overline
-        if line_length == 4 and skipped_1 is not 0:
+        if line_length == 4 and skipped_1 != 0:
             n_hard_4 += 1 # forward hard 4
             if n_hard_4 == 2:
                 return True # two hard 4 or free 4
