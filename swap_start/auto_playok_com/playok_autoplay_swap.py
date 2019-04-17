@@ -437,12 +437,12 @@ def main():
         # detect the game board
         print("Detecting the game board...")
         b1 = detect_board_edge()
-        b2 = (b1[0]+848, b1[1]+64, b1[2]+195, b1[3]-566)
+        b2 = (b1[0]+881, b1[1]+65, b1[0]+950, b1[1]+160)
     else:
         #x1, y1, x2, y2 = (2186,237,3063,1114)
         #b2 = (3245, 300, 3315, 400)
-        b1 = (2287, 263, 3007, 983)
-        b2 = (3151, 327, 3220, 423)
+        b1 = (2287, 269, 3007, 989)
+        b2 = (3151, 333, 3220, 429)
     print("Set board in the square (%d,%d) -> (%d,%d)" % b1)
     print("Please do not move game window from now on.")
 
