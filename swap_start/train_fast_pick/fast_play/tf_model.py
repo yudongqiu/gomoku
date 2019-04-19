@@ -60,8 +60,11 @@ class DNNModel(tf.keras.Model):
         self.layer_dense = layers.Dense(256, activation='relu')
         self.layer_res = layers.Dense(1, activation='tanh', name='result')
 
+        self.training = False
+
     def call(self, inputs, training=False):
         x = inputs
+        training = self.training
         if training:
             x = tf.image.random_flip_left_right(x)
             x = tf.image.random_flip_up_down(x)
@@ -101,7 +104,7 @@ class DNNModel(tf.keras.Model):
 
 
 def get_new_model():
-    model = DNNModel(n_stages=20, filters=256, kernel_size=5)
+    model = DNNModel(n_stages=5, filters=256, kernel_size=3)
     optimizer = tf.optimizers.Adagrad(learning_rate=0.01)
     model.compile(optimizer=optimizer, loss='mean_squared_error')
     return model
