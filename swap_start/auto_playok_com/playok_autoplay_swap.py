@@ -124,7 +124,7 @@ def place_stone(scnshot, move):
     y = y1 + shift_y * (ir-1)
     pyautogui.moveTo(x, y, duration=0.1)
     pyautogui.click()
-    time.sleep(0.2)
+    time.sleep(0.3)
 
 def play_one_move(scnshot, strategy, verbose=True):
     t_start = time.time()
@@ -332,7 +332,6 @@ begin_lib = [[ ( 8, 8),  ( 7, 9), (11,11)],
              [ (11, 5),  ( 8, 7), (10, 9)],
              [ ( 8, 6),  ( 5, 8), ( 8,10)],
              [ ( 8, 6),  ( 6, 8), ( 8,10)],
-             [ ( 4, 2),  ( 6, 8), ( 0, 5)],
              [ (10, 7),  ( 4,11), (10,13)]]
 
 def place_first_three_stones(scnshot):
@@ -342,6 +341,7 @@ def place_first_three_stones(scnshot):
     print("Playing first three moves!", openmoves)
     for move in openmoves:
         place_stone(scnshot, move)
+        time.sleep(0.5)
     return time.time() - t_start
 
 def swap_choose_side(scnshot, strategy, expected=3):
@@ -418,12 +418,18 @@ def rough_estimate_q(state):
 
 def detect_board_edge():
     try:
-        x1, y1 = pyautogui.locateCenterOnScreen('top_left.png')[:2]
-        x2, y2 = pyautogui.locateCenterOnScreen('bottom_right.png')[:2]
+        x1, y1 = pyautogui.locateCenterOnScreen('top_left.png', confidence=0.95)[:2]
+        x2, y2 = pyautogui.locateCenterOnScreen('bottom_right.png', confidence=0.95)[:2]
     except:
         raise RuntimeError("Board not found on the screen!")
     return x1, y1, x2, y2
 
+def detect_side_location():
+    try:
+        x, y = pyautogui.locateCenterOnScreen('tl2.png')[:2]
+    except:
+        raise RuntimeError("Side window not found on the screen!")
+    return x+14, y+10, x+75, y+100
 
 def main():
     import argparse
@@ -437,7 +443,7 @@ def main():
         # detect the game board
         print("Detecting the game board...")
         b1 = detect_board_edge()
-        b2 = (b1[0]+881, b1[1]+65, b1[0]+950, b1[1]+160)
+        b2 = detect_side_location()
     else:
         #x1, y1, x2, y2 = (2186,237,3063,1114)
         #b2 = (3245, 300, 3315, 400)
