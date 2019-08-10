@@ -5,12 +5,16 @@
 #=      Gomoku Game       =
 #==========================
 
-from __future__ import print_function, division
-import os, sys, time, collections
-from functools import update_wrapper
-import pickle, h5py
+import os
+import shutil
+import sys
+import time
+import collections
+import pickle
+import h5py
 import numpy as np
 import random
+from functools import update_wrapper
 
 def decorator(d):
     "Make function d a decorator: d wraps a function fn."
@@ -239,7 +243,7 @@ def prepare_train_data(learndata_A, learndata_B):
         train_X[i, :, :, 1] = (x == -1) # first plane indicates opponent_stones
         train_X[i, :, :, 2] = 1 # third plane indicates if i'm black
         train_Y[i, 0] = y
-        train_W[i] = n
+        train_W[i] = n ** 0.5
         i += 1
     for k in learndata_B:
         x, y, n = learndata_B[k]
@@ -249,9 +253,8 @@ def prepare_train_data(learndata_A, learndata_B):
         train_X[i, :, :, 1] = (x == -1) # first plane indicates opponent_stones
         train_X[i, :, :, 2] = 0 # third plane indicates if i'm black
         train_Y[i, 0] = y
-        train_W[i] = n
+        train_W[i] = n ** 0.5
         i += 1
-    train_W = train_W ** 0.5
     # save the current train data to data.h5 file
     h5f = h5py.File('data.h5','w')
     h5f.create_dataset('bx',data=np.array(bx, dtype=np.int8))
@@ -262,6 +265,31 @@ def prepare_train_data(learndata_A, learndata_B):
     h5f.close()
     print("Successfully prepared %d black and %d white training data." % (nb, nw))
     return train_X.astype(np.float16), train_Y, train_W
+
+def load_data_h5(fnm):
+    h5f = h5py.File(fnm,'r')
+    bx = h5f['bx']
+    by = h5f['by']
+    wx = h5f['wx']
+    wy = h5f['wy']
+    traint_W = h5f['w'][:]
+    nb, nw = len(bx), len(wx)
+    n_data = nb + nw
+    train_X = np.empty(n_data*15*15*3, dtype=np.int8).reshape(n_data,15,15,3)
+    train_Y = np.empty(n_data, dtype=np.float32).reshape(-1,1)
+    # fill in the data for black
+    train_X[:nb, :, :, 0] = np.equal(bx, 1)
+    train_X[:nb, :, :, 1] = np.equal(bx, -1)
+    train_X[:nb, :, :, 2] = 1
+    train_Y[:nb, 0] = by
+    # fill in the data for white
+    train_X[nb:, :, :, 0] = np.equal(wx, 1)
+    train_X[nb:, :, :, 1] = np.equal(wx, -1)
+    train_X[nb:, :, :, 2] = 0
+    train_Y[nb:, 0] = wy
+    h5f.close()
+    return train_X.astype(np.float16), train_Y, traint_W
+
 
 def gen_begin_board(allstones, begin_lib=None):
     if begin_lib == None:
@@ -335,10 +363,45 @@ def main():
 
     print("Training the model for %d iterations."%args.n_train)
 
+    last_i_train = -1
     for i_train in range(args.n_train):
         # check if the current model exists
         model_name = "trained_model_%03d" % i_train
-        assert not os.path.exists(model_name), "Current model %s already exists!" % model_name
+        if os.path.exists(model_name):
+            print(f"Folder {model_name} exists")
+            last_i_train = i_train
+        else:
+            break
+    if last_i_train >= 0:
+        # try to load the last trained model
+        model_name = "trained_model_%03d" % last_i_train
+        model_fnm = os.path.join(model_name, 'tf_model.h5')
+        if os.path.exists(model_fnm):
+            model = load_existing_model(model_fnm)
+            print(f"Loaded trained model from {model_fnm}")
+        else:
+            # if last trained model not exist, load the previous model
+            if last_i_train > 0:
+                prev_model_name = f"trained_model_{last_i_train-1:03d}"
+                prev_model_fnm = os.path.join(prev_model_name, 'tf_model.h5')
+                model = load_existing_model(prev_model_fnm)
+                print(f"Loaded lastest model from {prev_model_fnm}")
+            # try to reuse data and start training
+            train_data_fnm = os.path.join(model_name, 'data.h5')
+            if os.path.exists(train_data_fnm):
+                train_X, train_Y, train_W = load_data_h5(train_data_fnm)
+                print(f"Training data loaded from {train_data_fnm}, start training")
+                model.fit(train_X, train_Y, epochs=args.n_epoch, validation_split=0.2, shuffle=True, sample_weight=train_W)
+                save_model(model, model_fnm)
+                print("Model %s saved!" % model_name)
+            else:
+                # delete this folder and start again
+                shutil.rmtree(model_name)
+                print(f"Deleting folder {model_name}")
+                last_i_train -= 1
+
+    for i_train in range(last_i_train+1, args.n_train):
+        model_name = "trained_model_%03d" % i_train
         # create and enter the model folder
         os.mkdir(model_name)
         os.chdir(model_name)
