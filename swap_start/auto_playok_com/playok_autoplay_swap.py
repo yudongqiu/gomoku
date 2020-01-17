@@ -186,7 +186,7 @@ def game_paused(scnshot):
     # find if the board is on the image
     found_board = False
     n_orange = 0
-    board_color = Color(240, 176, 96)
+    board_color = Color(235, 178, 108)
     for x in range(5, 125, 10):
         for y in range(5, 125, 10):
             if image.getpixel((x,y)) == board_color:
@@ -201,12 +201,12 @@ def game_paused(scnshot):
     # check if the red bar is in the center
     cx, cy = scnshot.center
     n_red = 0
-    red_color = Color(238, 34, 17)
+    red_color = Color(226, 61, 37)
     for x in range(cx-200, cx+200, 20):
         for y in range(cy-70, cy+70, 10):
             if image.getpixel((x,y)) == red_color:
                 n_red += 1
-                if n_red > 2:
+                if n_red > 4:
                     return 1
     return 0
 
@@ -429,7 +429,7 @@ def detect_side_location():
         x, y = pyautogui.locateCenterOnScreen('tl2.png')[:2]
     except:
         raise RuntimeError("Side window not found on the screen!")
-    return x+14, y+10, x+75, y+100
+    return x+17, y-13, x+111, y+117
 
 def main():
     import argparse

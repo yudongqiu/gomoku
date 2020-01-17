@@ -286,7 +286,7 @@ def tf_predict_u(state, empty_spots_left, last_move, player):
         for i,current_move in enumerate(tf_moves):
             ci, cj = current_move
             all_interest_states[i,ci,cj,0] = 1 # put current move down
-        predict_y = tf_predict_u.model.predict(all_interest_states)
+        predict_y = tf_predict_u.model.predict(all_interest_states, batch_size=n_tf)
         predict_y = np.array(predict_y).flatten()
         # store the computed y
         for sid, y in zip(move_state_ids, predict_y):
