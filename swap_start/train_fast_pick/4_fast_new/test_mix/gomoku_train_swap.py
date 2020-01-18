@@ -384,6 +384,7 @@ def main():
         model_fnm = os.path.join(model_name, 'tf_model.h5')
         if os.path.exists(model_fnm):
             model = load_existing_model(model_fnm)
+            player_A.tf_predict_u.model = player_B.tf_predict_u.model = model
             print(f"Loaded trained model from {model_fnm}")
         else:
             # if last trained model not exist, load the previous model
@@ -391,6 +392,7 @@ def main():
                 prev_model_name = f"trained_model_{last_i_train-1:03d}"
                 prev_model_fnm = os.path.join(prev_model_name, 'tf_model.h5')
                 model = load_existing_model(prev_model_fnm)
+                player_A.tf_predict_u.model = player_B.tf_predict_u.model = model
                 print(f"Loaded lastest model from {prev_model_fnm}")
             # try to reuse data and start training
             train_data_fnm = os.path.join(model_name, 'data.h5')
