@@ -8,7 +8,8 @@ import numba
 import numpy as np
 
 board_size = 15
-estimate_level = 3
+estimate_level = 4
+
 def strategy(state):
     """ AI's strategy
 
@@ -18,6 +19,7 @@ def strategy(state):
     board = (x_stones, o_stones)
     stones is a set contains positions of one player's stones. e.g.
         x_stones = {(8,8), (8,9), (8,10), (8,11)}
+    last_move = (8,8) the last stone placed
     playing = 0|1, the current player's index
 
     Your strategy will return a position code for the next stone, e.g. (8,7)
@@ -30,6 +32,7 @@ def strategy(state):
     other_player = int(not playing)
     my_stones = board[playing]
     opponent_stones = board[other_player]
+    strategy.N_STONES = len(my_stones) + len(opponent_stones)
 
     if playing == 0: # if i'm black
         strategy.learndata = strategy.black_learndata
@@ -40,6 +43,7 @@ def strategy(state):
 
     # swap start should always have some stones
     assert last_move != None
+    last_move = (last_move[0]-1, last_move[1]-1)
     # build state
     state = np.zeros(board_size**2, dtype=np.int8).reshape(board_size, board_size)
     for i,j in my_stones:
@@ -111,7 +115,7 @@ def strategy(state):
     # return the best move
     return ((best_move[0]+1, best_move[1]+1), best_q)
 
-
+debug_moves = [(9,2), (6,5), (9,5), (4,5), (5,5)]
 
 level_max_n = [50, 50, 50, 50, 20, 20, 15, 15]
 def best_action_q(state, empty_spots_left, last_move, alpha, beta, player, level):
@@ -143,10 +147,14 @@ def best_action_q(state, empty_spots_left, last_move, alpha, beta, player, level
     n_moves = 40 if empty_spots_left > 200 else 20
     interested_moves = find_interesting_moves(state, empty_spots_left, move_interest_values, player, n_moves, verbose)
 
+    if empty_spots_left == (225-strategy.N_STONES-len(debug_moves)) and last_move == debug_moves[-1] and all(state[m] for m in debug_moves):
+        import IPython; IPython.embed()
+
     if len(interested_moves) == 1:
         current_move = interested_moves[0]
         current_move = (current_move[0], current_move[1])
         if is_first_move:
+            # skip one level to predict faster if there is only one first move to play 
             q = Q_stone(state, empty_spots_left, current_move, alpha, beta, player, level+1)
         else:
             q = Q_stone(state, empty_spots_left, current_move, alpha, beta, player, level)
@@ -690,17 +698,41 @@ def board_show(stones):
 
 def print_state(state):
     assert isinstance(state, np.ndarray)
-    print(' '*4 + ' '.join([chr(97+i) for i in xrange(board_size)]))
+    print(' '*4 + ' '.join([chr(97+i) for i in range(board_size)]))
     print (' '*3 + '='*(2*board_size))
-    for x in xrange(1, board_size+1):
+    for x in range(1, board_size+1):
         row = ['%2s|'%x]
-        for y in xrange(1, board_size+1):
+        for y in range(1, board_size+1):
             if state[x-1,y-1] == 1:
                 c = 'x'
             elif state[x-1,y-1] == -1:
                 c = 'o'
             else:
                 c = '-'
+            row.append(c)
+        print (' '.join(row))
+
+def print_state_with_interested_moves(state, interested_moves, last_move=None):
+    print(' '*4 + ' '.join([chr(97+i) for i in range(board_size)]))
+    print (' '*3 + '='*(2*board_size))
+    d_interest = {(i,j): idx for idx, (i,j) in enumerate(interested_moves)}
+    me_black = (strategy.playing == 0)
+    for i in range(board_size):
+        row = ['%2s|'%(i+1)]
+        for j in range(board_size):
+            if state[i,j] == 1:
+                c = 'x' if me_black else 'o'
+            elif state[i,j] == -1:
+                c = 'o' if me_black else 'x'
+            elif (i,j) in d_interest:
+                v = d_interest[(i,j)]
+                c = str(v) if v < 10 else '?'
+                c = '\033[91m' + c + '\033[0m'
+            else:
+                c = '-'
+            # color last move
+            if last_move and i == last_move[0] and j == last_move[1]:
+                c = '\033[92m' + c + '\033[0m'
             row.append(c)
         print (' '.join(row))
 
@@ -717,12 +749,12 @@ def test():
 
 def draw_state(state):
     board_size = 15
-    print(' '*4 + ' '.join([chr(97+i) for i in xrange(board_size)]))
+    print(' '*4 + ' '.join([chr(97+i) for i in range(board_size)]))
     print (' '*3 + '='*(2*board_size))
     me = state[0,0,2]
-    for x in xrange(1, board_size+1):
+    for x in range(1, board_size+1):
         row = ['%2s|'%x]
-        for y in xrange(1, board_size+1):
+        for y in range(1, board_size+1):
             if state[x-1,y-1,0] == 1:
                 c = 'x' if me == 1 else 'o'
             elif state[x-1,y-1,1] == 1:

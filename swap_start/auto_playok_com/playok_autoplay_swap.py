@@ -5,22 +5,11 @@ from Xlib import display, X
 from PIL import Image
 import time, random
 import pyautogui
+from colors import COLORS
 
 pyautogui.PAUSE = 0.1
 pyautogui.FAILSAFE = True
 
-class Color:
-    def __init__(self, r, g, b, t=10):
-        self.rgb = (r, g, b)
-        self.t = t
-
-    def __eq__(self, otherrgb):
-        if isinstance(otherrgb, Color):
-            otherrgb = otherrgb.rgb
-        for c1, c2 in zip(self.rgb, otherrgb):
-            if abs(c1 - c2) > self.t:
-                return False
-        return True
 
 class ScreenShot(object):
     """ This class can help quickly update a screenshot of certain region """
@@ -96,8 +85,8 @@ def get_stone_type(image, pos):
     """ Get the stone type at pos,
     return 'b' for black, 'bl' for black last played,
            'w' for white, 'wl' for white last played, None if not found """
-    black_color = Color(44, 44, 44)
-    white_color = Color(243, 243, 243)
+    black_color = COLORS.BLACK_STONE
+    white_color = COLORS.WHITE_STONE
     w, h = image.size
     x, y = pos
     all_pos = [(x+dx, y+dy) for dx, dy in [(-15, 3), (15, -2), (4, 15), (-3, -15)] if x+dx >= 0 and x+dx <= w and y+dy >= 0 and y+dy <= h]
@@ -186,7 +175,7 @@ def game_paused(scnshot):
     # find if the board is on the image
     found_board = False
     n_orange = 0
-    board_color = Color(235, 178, 108)
+    board_color = COLORS.ORANGE
     for x in range(5, 125, 10):
         for y in range(5, 125, 10):
             if image.getpixel((x,y)) == board_color:
@@ -201,7 +190,7 @@ def game_paused(scnshot):
     # check if the red bar is in the center
     cx, cy = scnshot.center
     n_red = 0
-    red_color = Color(226, 61, 37)
+    red_color = COLORS.RED
     for x in range(cx-200, cx+200, 20):
         for y in range(cy-70, cy+70, 10):
             if image.getpixel((x,y)) == red_color:
@@ -213,16 +202,19 @@ def game_paused(scnshot):
 def check_me_playing(scnshot2):
     w, h = scnshot2.width, scnshot2.height
     image = scnshot2.capture()
-    start = max(w-20, 0)
-    playing_color = Color(31, 41, 47)
+    start = max(w-40, 0)
+    playing_color = COLORS.PLAYING_TRIANGLE
     my_turn = False
-    for posx in range(start, w-3, 2):
-        if image.getpixel((posx,h-1)) == playing_color and image.getpixel((posx+2,h-2)) == playing_color:
-            my_turn = True
+    for posy in range(h-10, h):
+        for posx in range(start, w-3, 2):
+            if image.getpixel((posx,posy-1)) == playing_color and image.getpixel((posx+2,posy-2)) == playing_color:
+                my_turn = True
+                break
+        if my_turn == True:
             break
     if my_turn == True:
         c2 = image.getpixel((0,0))
-        if c2 == Color(255,255,255):
+        if c2 == COLORS.WHITE:
             return 1 # white player
         else:
             return 0
@@ -232,13 +224,12 @@ def check_me_playing(scnshot2):
 def click_start(scnshot):
     x1, y1, x2, y2 = scnshot.border
     cx, cy = scnshot.center
-    white_color = Color(255,255,255)
     image = scnshot.capture()
     found_start = None
     for y in range(cy, cy+100, 5):
-        if image.getpixel((cx,y)) == white_color:
-            if image.getpixel((cx+40,y)) == white_color:
-                if image.getpixel((cx+40,y+10)) == white_color:
+        if image.getpixel((cx,y)) == COLORS.WHITE:
+            if image.getpixel((cx+40,y)) == COLORS.WHITE:
+                if image.getpixel((cx+40,y+10)) == COLORS.WHITE:
                     found_start = (cx, y)
                     break
     game_started = False
@@ -260,19 +251,18 @@ def swap_waiting(scnshot):
     w, h = scnshot.width, scnshot.height
     cx, cy = scnshot.center
     image = scnshot.capture()
-    white_color = Color(255,255,255)
     n_white = 0
     result = 0
     shift = int((h-1) / 14)
     for x in range(cx-shift*2, cx+shift*2, 10):
-        if image.getpixel((x,h-2)) == white_color:
+        if image.getpixel((x,h-2)) == COLORS.WHITE:
             n_white += 1
             if n_white > 2:
                 result = 1
                 break
     n_white = 0
     for x in range(cx-shift*2, cx+shift*2, 10):
-        if image.getpixel((x,(h-shift))) == white_color:
+        if image.getpixel((x,(h-shift))) == COLORS.WHITE:
             n_white += 1
             if n_white > 2:
                 result = 2
