@@ -261,8 +261,8 @@ def load_data_h5(fnm):
     train_X[:nb, 2, :, :] = 1
     train_Y[:nb, 0] = by
     # fill in the data for white
-    train_X[nb:, 0, :, :] = np.equal(wx, 1)
-    train_X[nb:, 1, :, :] = np.equal(wx, -1)
+    train_X[nb:, 0, :, :] = np.equal(wx, -1)
+    train_X[nb:, 1, :, :] = np.equal(wx, 1)
     train_X[nb:, 2, :, :] = 0
     train_Y[nb:, 0] = wy
     h5f.close()
@@ -425,6 +425,8 @@ def main():
         # reset player cache
         player_A.reset_cache()
         player_B.reset_cache()
+        # share the cache
+        player_B.cache = player_A.cache
         # collect training data
         train_X, train_Y, train_W = prepare_train_data(player_A.learndata, player_B.learndata)
         # fit the model

@@ -105,7 +105,7 @@ class DNNModel(nn.Module):
         v_size = int(size * validation_split)
         t_size = size - v_size
         print(f"Fitting model with {size} data, {t_size} for training and {v_size} for validation")
-        print('-'*60)
+        print('-'*80)
         # convert to device
         x = torch.from_numpy(x)#.to(self.device, non_blocking=True)
         y = torch.from_numpy(y.reshape(-1, 1))#.to(self.device, non_blocking=True)
@@ -117,6 +117,9 @@ class DNNModel(nn.Module):
         for epoch in range(epochs):
             self.train()
             n_done = 0
+            total_loss = 0.0
+            valid_loss = 10000
+            i_b = 0
             for xb, yb in train_dl:
                 xb, yb = xb.to(self.device), yb.to(self.device)
                 pred = self(xb)
@@ -125,8 +128,12 @@ class DNNModel(nn.Module):
                 self.optimizer.step()
                 self.optimizer.zero_grad()
                 # print status
+                i_b += 1
                 n_done += len(xb)
-                print(f"Epoch {epoch:5d}/{epochs} {n_done:9d}/{t_size}: loss {loss:.5f}", end="\r")
+                if i_b % 10 == 0:
+                    total_loss += loss
+                    average_loss = total_loss / i_b
+                    print(f"Epoch {epoch:5d}/{epochs} {n_done:9d}/{t_size}: loss {average_loss:.5f}", end="\r")
             if v_size > 0:
                 self.eval()
                 with torch.no_grad():
@@ -135,9 +142,13 @@ class DNNModel(nn.Module):
                         xb, yb = xb.to(self.device), yb.to(self.device)
                         valid_loss += self.criterion(self(xb), yb)
                     valid_loss = valid_loss / len(valid_dl)
-                print(f"Epoch {epoch:5d}/{epochs} {t_size:9d}/{t_size}: loss {loss:.5f} val_loss {valid_loss:.5f}")
+                print(f"Epoch {epoch:5d}/{epochs} {t_size:9d}/{t_size}: loss {average_loss:.5f} val_loss {valid_loss:.5f}")
             else:
                 print()
+            # early return if loss is small enough
+            if valid_loss < 0.001 and epoch > 5:
+                break
+            
 
     def fit_manual(self, x, y, epochs, batch_size=32, validation_split=0.2):
         x = torch.from_numpy(x).to(self.device, non_blocking=True)

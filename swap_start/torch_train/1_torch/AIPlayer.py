@@ -63,7 +63,7 @@ class AIPlayer:
         empty_spots_left = board_size**2 - len(board[0]) - len(board[1])
         # predict next best action and q
         player = -1 if self.playing_white else 1
-        best_move, best_q = self.best_action_q(state, empty_spots_left, alpha, beta, player, level=0)
+        best_move, best_q = self.best_action_q(state.copy(), empty_spots_left, alpha, beta, player, level=0)
         # save the winrate and the state
         self.update_if_game_finish(state, best_move, best_q, player)
         # return the best move
@@ -104,7 +104,12 @@ class AIPlayer:
         best_move = (interested_moves[0,0], interested_moves[0,1]) # continue to play even I'm losing
         # if there is only one move to place, directly return that move, use same level
         if len(interested_moves) == 1:
-            best_q = self.next_iter_winrate(state, empty_spots_left, best_move, alpha, beta, player, level)
+            # check if this move is known
+            move, move_q, unknown_moves, unknown_move_ids = self.check_known(state, interested_moves, player, level)
+            if move != None:
+                best_q = move_q
+            else:
+                best_q = self.next_iter_winrate(state, empty_spots_left, best_move, alpha, beta, player, level)
             return best_move, best_q
         # if there are multiple moves to evaluate, check cache first
         best_move, max_q, unknown_moves, unknown_move_ids = self.check_known(state, interested_moves, player, level)
@@ -226,6 +231,9 @@ class AIPlayer:
 
         # store learn data for oppoenent, this helps improve the data
         state_id = state.tobytes()
+        # if self.playing_white == False and best_q == -1.0:
+            # import IPython; IPython.embed()
+
         self.opponent.learndata[state_id] = [state.copy(), -best_q, 1]
 
         # # record the history states
@@ -737,6 +745,19 @@ def read_board_state(f):
                         print(f'found unknown stone: {s}')
     board_state = [board, last_move, playing, board_size]
     return board_state
+
+def convert_board_state(board_state):
+    board, last_move, playing, board_size = board_state
+    playing_white = bool(playing)
+    # build new state representation
+    state = np.zeros(board_size**2, dtype=np.int8).reshape(board_size, board_size)
+    # put black stones, update index
+    for br, bc in board[0]:
+        state[br-1,bc-1] = 1
+    # put white stones, update index
+    for wr, wc in board[1]:
+        state[wr-1,wc-1] = -1
+    return state
 
 def show_state(state):
     board_size = 15
