@@ -3,6 +3,7 @@
 
 import sys
 import random
+import time
 import numpy as np
 
 import torch
@@ -73,6 +74,11 @@ class DNNModel(nn.Module):
         # to device
         self.to(self.device, non_blocking=True)
 
+    def setup_optim(self):
+        self.criterion = torch.nn.MSELoss()
+        self.optimizer = torch.optim.SGD(self.parameters(), momentum=0.9, lr=0.0001)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', patience=3, verbose=True)
+
 
     def forward(self, x):
         # first block
@@ -95,9 +101,10 @@ class DNNModel(nn.Module):
         res = self.final_tanh(x)
         return res
     
-    def setupOptim(self, criterion, optimizer):
+    def setupOptim(self, criterion, optimizer, scheduler):
         self.criterion = criterion
         self.optimizer = optimizer
+        self.scheduler = scheduler
         
     def fit(self, x, y, epochs, batch_size=32, validation_split=0.2, shuffle=True, verbose=True):
         assert len(x) == len(y), f'Wrong shapes provided. x {x.shape}, y {y.shape}'
@@ -107,47 +114,65 @@ class DNNModel(nn.Module):
         print(f"Fitting model with {size} data, {t_size} for training and {v_size} for validation")
         print('-'*80)
         # convert to device
-        x = torch.from_numpy(x)#.to(self.device, non_blocking=True)
-        y = torch.from_numpy(y.reshape(-1, 1))#.to(self.device, non_blocking=True)
+        # shuffle before training
+        shuffle_idxs = np.random.permutation(size)
+        x = torch.from_numpy(x[shuffle_idxs])
+        y = torch.from_numpy(y[shuffle_idxs].reshape(-1, 1))
         # build dataset and data loaders
         train_ds = TensorDataset(x[:t_size], y[:t_size])
         train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=shuffle, pin_memory=True)
         valid_ds = TensorDataset(x[t_size:], y[t_size:])
-        valid_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=shuffle, pin_memory=True)
+        valid_dl = DataLoader(valid_ds, batch_size=batch_size, shuffle=False, pin_memory=True)
+        # keep track of validation loss drop
+        min_valid_loss = float('inf')
+        min_valid_loss_idx = size
+        # setup optim
+        self.setup_optim()
+        # start training
         for epoch in range(epochs):
-            self.train()
-            n_done = 0
-            total_loss = 0.0
-            valid_loss = 10000
-            i_b = 0
-            for xb, yb in train_dl:
-                xb, yb = xb.to(self.device), yb.to(self.device)
-                pred = self(xb)
-                loss = self.criterion(pred, yb)
-                loss.backward()
-                self.optimizer.step()
-                self.optimizer.zero_grad()
-                # print status
-                i_b += 1
-                n_done += len(xb)
-                if i_b % 10 == 0:
+            try:
+                self.train()
+                n_done = 0
+                total_loss = 0.0
+                valid_loss = float('inf')
+                i_b = 0
+                t_start = time.time()
+                for xb, yb in train_dl:
+                    xb, yb = xb.to(self.device), yb.to(self.device)
+                    pred = self(xb)
+                    loss = self.criterion(pred, yb)
+                    loss.backward()
+                    self.optimizer.step()
+                    self.optimizer.zero_grad()
+                    # print status
+                    i_b += 1
+                    n_done += len(xb)
                     total_loss += loss
                     average_loss = total_loss / i_b
-                    print(f"Epoch {epoch:5d}/{epochs} {n_done:9d}/{t_size}: loss {average_loss:.5f}", end="\r")
-            if v_size > 0:
-                self.eval()
-                with torch.no_grad():
-                    valid_loss = 0.0
-                    for xb, yb in valid_dl:
-                        xb, yb = xb.to(self.device), yb.to(self.device)
-                        valid_loss += self.criterion(self(xb), yb)
-                    valid_loss = valid_loss / len(valid_dl)
-                print(f"Epoch {epoch:5d}/{epochs} {t_size:9d}/{t_size}: loss {average_loss:.5f} val_loss {valid_loss:.5f}")
-            else:
-                print()
-            # early return if loss is small enough
-            if valid_loss < 0.001 and epoch > 5:
-                break
+                    if i_b % 10 == 0:    
+                        print(f"Epoch {epoch:5d}/{epochs} {n_done:9d}/{t_size} | loss {average_loss:.5f}", end="\r")
+                if v_size > 0:
+                    self.eval()
+                    with torch.no_grad():
+                        valid_loss = 0.0
+                        for xb, yb in valid_dl:
+                            xb, yb = xb.to(self.device), yb.to(self.device)
+                            valid_loss += self.criterion(self(xb), yb)
+                        valid_loss = valid_loss / len(valid_dl)
+                    print(f"Epoch {epoch:5d}/{epochs} {t_size:9d}/{t_size} | loss {average_loss:.5f} | val_loss {valid_loss:.5f} | {time.time() - t_start:.2f}s")
+                else:
+                    print(f"Epoch {epoch:5d}/{epochs} {t_size:9d}/{t_size} | loss {average_loss:.5f} | {time.time() - t_start:.2f}s")
+                # early return if loss is not decreasing for 7 epochs
+                if valid_loss < min_valid_loss:
+                    min_valid_loss = valid_loss
+                    min_valid_loss_epoch = epoch
+                elif epoch > min_valid_loss_epoch + 7 and epoch >= 20:
+                    break
+                self.scheduler.step(valid_loss)
+            except KeyboardInterrupt:
+                command = input("\nTraining paused. Save and exit? (y/N): ")
+                if command.lower() == 'y':
+                    return
             
 
     def fit_manual(self, x, y, epochs, batch_size=32, validation_split=0.2):
@@ -190,17 +215,16 @@ class DNNModel(nn.Module):
 
 
 def get_new_model():
-    model = DNNModel(n_stages=2, planes=168, kernel_size=3)
-    criterion = torch.nn.MSELoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.001)
-    model.setupOptim(criterion, optimizer)
-    return model
+    return DNNModel(n_stages=2, planes=168, kernel_size=3)
 
 def save_model(model, path):
-    torch.save(model, path)
+    torch.save(model.state_dict(), path)
 
 def load_existing_model(path):
-    return torch.load(path)
+    model = get_new_model()
+    model.load_state_dict(torch.load(path))
+    model.eval()
+    return model
 
 #
 def test_model():

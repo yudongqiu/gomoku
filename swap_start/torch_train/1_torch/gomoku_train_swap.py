@@ -116,7 +116,7 @@ class Gomoku(object):
             if self.fastmode < 2: print("--- %s's turn ---" % current_player.name)
             max_try = 5
             for i_try in range(max_try):
-                action = current_player.strategy(self.state)
+                action, _ = current_player.strategy(self.state)
                 if action == (0, 0):
                     print("Player %s admit defeat!" % current_player.name)
                     winner = other_player.name
@@ -323,7 +323,7 @@ def main():
                 print(f"Loaded lastest model from {prev_model_fnm}")
             # try to reuse data and start training
             train_data_fnm = os.path.join(model_name, 'data.h5')
-            if os.path.exists(train_data_fnm)  and False:
+            if os.path.exists(train_data_fnm):
                 train_X, train_Y, train_W = load_data_h5(train_data_fnm)
                 print(f"Training data loaded from {train_data_fnm}, start training")
                 model.fit(train_X, train_Y, epochs=args.n_epoch, validation_split=0.2)
@@ -413,7 +413,7 @@ def main():
                     i_game += 1
                     if i_game >= args.train_step:
                         break
-                    print(f"New game {i_game}: {game.last_begin_board} | data {n_used//1000}k/{max_data_count//1000}k")
+                    print(f"New game {i_game}: {format_begin_board(game.last_begin_board)} | data {n_used//1000}k/{max_data_count//1000}k")
                 # prevent memory overflow and getting killed
                 if n_used > max_data_count:
                     print('Learn data is full, stopping')
@@ -472,6 +472,12 @@ def main():
             model_fnm = os.path.join(model_name, MODEL_FILE)
             model = load_existing_model(model_fnm)
             player_A.model = player_B.model = model
+
+def format_begin_board(begin_board):
+    black_stones, white_stones = begin_board
+    bs = ','.join(f'({r:2},{c:2})' for r,c in black_stones)
+    ws = ','.join(f'({r:2},{c:2})' for r,c in white_stones)
+    return f"{bs} | {ws}"
 
 def get_state(x1):
     is_black = bool(x1[2,0,0])

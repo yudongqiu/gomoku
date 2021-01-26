@@ -12,9 +12,9 @@ board_size = 15
 show_q = False
 
 class AIPlayer:
-    def __init__(self, name, model, level=0):
+    def __init__(self, name, model=None, level=0):
         self.name = name
-        self.model = model
+        self.load_model(model)
         self.level = level
         self.learndata = dict()
         self.opponent = None
@@ -22,6 +22,18 @@ class AIPlayer:
         self.move_interest_values = np.zeros(board_size**2, dtype=np.float32).reshape(board_size,board_size)
         self.reset()
         self.reset_cache()
+
+    def load_model(self, model):
+        # no data
+        if model is None:
+            self.model = None
+        # if provided path
+        elif isinstance(model, str):
+            import torch
+            self.model = torch.load(model)
+        else:
+            # provided model
+            self.model = model
 
     def reset(self):
         """ Reset before a new game """
@@ -33,7 +45,7 @@ class AIPlayer:
         """ Reset cache before using new model """
         self.cache = LeveledCache(maxlevel=self.level, maxsize=1000000)
 
-    def strategy(self, board_state):
+    def strategy(self, board_state, starting_level=0):
         """ AI's strategy 
         Information provided to you:
         board_state = (board, last_move, playing, board_size)
@@ -63,11 +75,12 @@ class AIPlayer:
         empty_spots_left = board_size**2 - len(board[0]) - len(board[1])
         # predict next best action and q
         player = -1 if self.playing_white else 1
-        best_move, best_q = self.best_action_q(state.copy(), empty_spots_left, alpha, beta, player, level=0)
+        # TODO: remove .copy()
+        best_move, best_q = self.best_action_q(state.copy(), empty_spots_left, alpha, beta, player, level=starting_level)
         # save the winrate and the state
         self.update_if_game_finish(state, best_move, best_q, player)
         # return the best move
-        return (best_move[0]+1, best_move[1]+1)
+        return (best_move[0]+1, best_move[1]+1), best_q
 
     def best_action_q(self, state, empty_spots_left, alpha, beta, player, level=0):
         """ 
@@ -234,7 +247,8 @@ class AIPlayer:
         # if self.playing_white == False and best_q == -1.0:
             # import IPython; IPython.embed()
 
-        self.opponent.learndata[state_id] = [state.copy(), -best_q, 1]
+        if hasattr(self, 'opponent') and hasattr(self.opponent, 'learndata'):
+            self.opponent.learndata[state_id] = [state.copy(), -best_q, 1]
 
         # # record the history states
         # self.hist_states.append(opponent_state_id)
